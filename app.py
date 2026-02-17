@@ -28,6 +28,29 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Header Banner
+# Replace the st.markdown for CSS with this cleaner version
+st.markdown("""
+    <style>
+    .stApp { background-color: #f8f9fa; }
+    .header { 
+        background-color: #002395;  /* Solid deep blue - government/trustworthy */
+        color: white; 
+        padding: 25px 20px; 
+        text-align: center; 
+        border-radius: 0 0 12px 12px;  /* Slight bottom curve for softness */
+        margin-bottom: 25px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    }
+    .header h1 { margin: 0; font-size: 2.2rem; }
+    .header h3 { margin: 8px 0 0; font-size: 1.3rem; font-weight: 400; }
+    .header p { margin: 8px 0 0; font-size: 1rem; opacity: 0.9; }
+    .sidebar .sidebar-content { background-color: #001a7a; color: white; }  /* Darker blue sidebar for contrast */
+    .stButton>button { background-color: #FFB612; color: black; border: none; font-weight: bold; }
+    .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; border-left: 5px solid #002395; }
+    </style>
+""", unsafe_allow_html=True)
+
+# Simplified Header - one color, no gradient
 st.markdown("""
     <div class="header">
         <h1>Department of Justice and Constitutional Development</h1>
