@@ -17,7 +17,7 @@ st.markdown("""
     <style>
     .stApp { background-color: #f8f9fa; }
     .header { 
-        background-color: #ff5c00;  /* Solid deep e - professional & trustworthy */
+        background-color: #ff5COO;  /* Solid deep e - professional & trustworthy */
         color: white; 
         padding: 25px 20px; 
         text-align: center; 
