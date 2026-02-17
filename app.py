@@ -11,13 +11,13 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
+l
 # Custom CSS - simplified single-color header + clean styling
 st.markdown("""
     <style>
     .stApp { background-color: #f8f9fa; }
     .header { 
-        background-color: #002395;  /* Solid deep navy blue - professional & trustworthy */
+        background-color: #ff5c00;  /* Solid deep e - professional & trustworthy */
         color: white; 
         padding: 25px 20px; 
         text-align: center; 
