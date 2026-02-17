@@ -1,136 +1,129 @@
-# app.py - DOJ&CD Internal Dynamic Dashboard
+# app.py - Minimal DOJ&CD Dashboard with Official Color Scheme
 import streamlit as st
-import pandas as pd
-import plotly.express as px
-from datetime import datetime
 
-# Page config - wide layout for dashboard feel
+# Page config
 st.set_page_config(
     page_title="DOJ&CD Internal Dashboard",
     page_icon="⚖️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
-l
-# Custom CSS - simplified single-color header + clean styling
+
+# Clean CSS with DOJ&CD / Government green scheme
 st.markdown("""
     <style>
-    .stApp { background-color: #f8f9fa; }
+    .stApp { 
+        background-color: #f9fbfd; 
+        font-family: 'Helvetica Neue', Arial, sans-serif;
+    }
     .header { 
-        background-color: #ff5COO;  /* Solid deep e - professional & trustworthy */
+        background-color: #005c28;  /* Official dark green (Pantone 349C inspired) */
         color: white; 
-        padding: 25px 20px; 
+        padding: 30px 20px; 
         text-align: center; 
-        border-radius: 0 0 12px 12px; 
-        margin-bottom: 25px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        margin-bottom: 30px;
+        border-bottom: 4px solid #FFB612;  /* SA gold accent */
     }
-    .header h1 { margin: 0; font-size: 2.2rem; }
-    .header h3 { margin: 8px 0 0; font-size: 1.3rem; font-weight: 400; }
-    .header p { margin: 8px 0 0; font-size: 1rem; opacity: 0.9; }
-    .sidebar .sidebar-content { background-color: #001a7a; color: white; }  /* Darker blue sidebar */
-    .stButton>button { 
-        background-color: #FFB612; 
-        color: black; 
-        border: none; 
-        font-weight: bold; 
-        padding: 10px 16px;
+    .header-logo {
+        max-width: 180px;
+        margin-bottom: 15px;
     }
-    .card { 
-        background: white; 
-        padding: 20px; 
-        border-radius: 10px; 
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1); 
-        margin-bottom: 20px; 
-        border-left: 5px solid #002395; 
+    .header h1 { 
+        margin: 0; 
+        font-size: 2.4rem; 
+        font-weight: 600;
+    }
+    .header h3 { 
+        margin: 10px 0 0; 
+        font-size: 1.4rem; 
+        font-weight: 400;
+    }
+    .header p { 
+        margin: 10px 0 0; 
+        font-size: 1.1rem; 
+        opacity: 0.95;
+    }
+    /* Tabs - green theme */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #ffffff;
+        border-bottom: 2px solid #e0e0e0;
+        padding: 0 20px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        white-space: pre-wrap;
+        background-color: #f0f4f8;
+        border-radius: 8px 8px 0 0;
+        font-size: 1.1rem;
+        font-weight: 500;
+        color: #333;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #ffffff !important;
+        border-bottom: 3px solid #005c28;  /* Selected tab green */
+        color: #005c28 !important;
+    }
+    /* Buttons - SA gold/orange accent */
+    .stButton > button {
+        background-color: #FFB612;
+        color: black;
+        border: none;
+        font-weight: bold;
+        padding: 10px 20px;
+        border-radius: 6px;
+    }
+    .stButton > button:hover {
+        background-color: #e6a000;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Simplified Header - single solid color
+# Header with Logo & Official Colors
+st.markdown('<div class="header">', unsafe_allow_html=True)
+st.image(
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Coat_of_arms_of_South_Africa.svg/200px-Coat_of_arms_of_South_Africa.svg.png",
+    use_column_width=False
+)
 st.markdown("""
-    <div class="header">
-        <h1>Department of Justice and Constitutional Development</h1>
-        <h3>ACCESS TO JUSTICE FOR ALL</h3>
-        <p>Internal Operational Dashboard • Republic of South Africa 🇿🇦</p>
-    </div>
+    <h1>Department of Justice and Constitutional Development</h1>
+    <h3>ACCESS TO JUSTICE FOR ALL</h3>
+    <p>Internal Dashboard • Republic of South Africa 🇿🇦</p>
 """, unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
-# Sidebar Navigation - mirroring your original menu
-st.sidebar.title("NAVIGATION")
-st.sidebar.markdown("**Home**")
+# Tabs
+tab_home, tab_sundry = st.tabs(["HOME", "SUNDRY"])
 
-nav_options = [
-    "Sundry", "Fleet Services", "Receipts", "Invoices", "MOJAPAY",
-    "TWF", "Registers", "Checklists", "Circulars", "Subsistence"
-]
+# HOME tab
+with tab_home:
+    st.markdown("<h2 style='text-align: center; color: #005c28; margin-top: 40px;'>Welcome to the DOJ&CD Internal Dashboard</h2>", unsafe_allow_html=True)
+    
+    st.markdown("""
+        <p style='text-align: center; font-size: 1.2rem; color: #555; max-width: 700px; margin: 20px auto;'>
+            This secure portal supports key administrative and financial operations.<br>
+            Start by selecting a section above.
+        </p>
+    """, unsafe_allow_html=True)
+    
+    if st.button("Go to Sundry Section"):
+        st.success("Switch to the **SUNDRY** tab above to continue.")
+    
+    st.markdown("<hr style='margin: 50px 0;'>", unsafe_allow_html=True)
+    st.caption("Confidential • DOJ&CD Internal Use Only")
 
-selected = st.sidebar.radio("Main Sections", nav_options, index=0)
-
-# Placeholder for selected section (we'll build these one by one)
-if selected != "Home":
-    st.info(f"Section: **{selected}** – Coming soon! Let me know what content to add here first (e.g. table, form, status list, chart).")
-
-# Main Content Area - Key Service Providers (like your Fidelity & FNB panels)
-st.subheader("Key Service Providers")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.image("https://via.placeholder.com/150x80/00A651/FFFFFF?text=Fidelity+CIT", use_column_width=True)
-    st.markdown("**FIDELITY CIT**")
-    st.markdown("Cash in Transit Services")
-    st.markdown("dojservices@fidelity-services.com")
-    if st.button("Request Collection / View Schedule", key="fidelity"):
-        st.success("Collection request form opens here (to be built)...")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col2:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.image("https://via.placeholder.com/150x80/FFB612/000000?text=FNB", use_column_width=True)
-    st.markdown("**FNB CHANGE REQUEST**")
-    st.markdown("Bank Change / Balancing Requests")
-    st.markdown("DLFNBSelbyBalancing@fnb.co.za")
-    if st.button("Submit Change Request", key="fnb"):
-        st.success("Change request form opens here (to be built)...")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col3:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("**Other Services**")
-    st.markdown("- Sundry Payments\n- Fleet & Subsistence\n- More sections coming...")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Quick Stats / Overview (placeholder - expand later)
-st.subheader("Quick Overview")
-col_a, col_b, col_c = st.columns(3)
-col_a.metric("Pending Invoices", "42", "+5 today")
-col_b.metric("Receipts This Month", "R 1.2M", "↑ 8%")
-col_c.metric("Next CIT Collection", "Tomorrow", "JHB Office")
-
-# Interactive Communication - Team Chat (real-time in browser session)
-st.subheader("💬 Team Communication")
-
-if "chat_messages" not in st.session_state:
-    st.session_state.chat_messages = [
-        {"user": "Admin", "time": "15:45", "text": "Welcome to the DOJ&CD dashboard!"},
-        {"user": "Finance", "time": "15:50", "text": "Looking forward to tracking invoices and CIT better."}
-    ]
-
-for msg in st.session_state.chat_messages:
-    with st.chat_message(msg["user"]):
-        st.caption(f"{msg['user']} • {msg['time']}")
-        st.write(msg["text"])
-
-if prompt := st.chat_input("Type a message or query for the team..."):
-    st.session_state.chat_messages.append({
-        "user": "You",
-        "time": datetime.now().strftime("%H:%M"),
-        "text": prompt
-    })
-    st.rerun()
+# SUNDRY tab
+with tab_sundry:
+    st.header("Sundry Section")
+    st.markdown("This is the dedicated **Sundry** page – now in official DOJ&CD green scheme.")
+    st.info("Content coming soon — suggestions: submission form for sundry payments, list of recent transactions, or status tracker?")
+    
+    st.markdown("""
+        <p style='color: #666;'>
+            Back to <strong>HOME</strong> tab for overview.
+        </p>
+    """, unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
-st.caption("DOJ&CD Internal Tool • Confidential • © 2026")
+st.caption("© Department of Justice and Constitutional Development • 2026")
