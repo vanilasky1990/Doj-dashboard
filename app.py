@@ -10,73 +10,36 @@ st.set_page_config(
 )
 
 # Clean CSS with DOJ&CD / Government green scheme
+# Solid orange banner header
 st.markdown("""
     <style>
-    .stApp { 
-        background-color: #f9fbfd; 
-        font-family: 'Helvetica Neue', Arial, sans-serif;
-    }
-    .header { 
-        background-color: #005c28;  /* Official dark green (Pantone 349C inspired) */
-        color: white; 
-        padding: 30px 20px; 
-        text-align: center; 
+    .tsakane-banner {
+        background-color: #FFB612;  /* Solid orange - change to #FF7A01 if you want brighter */
+        color: #000000;             /* Black text for strong contrast, or #FFFFFF for white */
+        padding: 40px 20px;
+        text-align: center;
+        border-radius: 0 0 15px 15px;  /* Rounded bottom corners for modern look */
+        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
         margin-bottom: 30px;
-        border-bottom: 4px solid #FFB612;  /* SA gold accent */
+        font-family: 'Arial Black', sans-serif;
     }
-    .header-logo {
-        max-width: 180px;
-        margin-bottom: 15px;
-    }
-    .header h1 { 
-        margin: 0; 
-        font-size: 2.4rem; 
-        font-weight: 600;
-    }
-    .header h3 { 
-        margin: 10px 0 0; 
-        font-size: 1.4rem; 
-        font-weight: 400;
-    }
-    .header p { 
-        margin: 10px 0 0; 
-        font-size: 1.1rem; 
-        opacity: 0.95;
-    }
-    /* Tabs - green theme */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: #ffffff;
-        border-bottom: 2px solid #e0e0e0;
-        padding: 0 20px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #f0f4f8;
-        border-radius: 8px 8px 0 0;
-        font-size: 1.1rem;
-        font-weight: 500;
-        color: #333;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #ffffff !important;
-        border-bottom: 3px solid #005c28;  /* Selected tab green */
-        color: #005c28 !important;
-    }
-    /* Buttons - SA gold/orange accent */
-    .stButton > button {
-        background-color: #FFB612;
-        color: black;
-        border: none;
+    .tsakane-title {
+        margin: 0;
+        font-size: 3.2rem;
         font-weight: bold;
-        padding: 10px 20px;
-        border-radius: 6px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
     }
-    .stButton > button:hover {
-        background-color: #e6a000;
+    .tsakane-subtitle {
+        margin: 10px 0 0;
+        font-size: 1.4rem;
+        opacity: 0.9;
     }
     </style>
+
+    <div class="tsakane-banner">
+        <h1 class="tsakane-title">Tsakane Dashboard</h1>
+        <p class="tsakane-subtitle">Joy in Every Operation • Ekurhuleni Internal Tool 🇿🇦</p>
+    </div>
 """, unsafe_allow_html=True)
 
 # Header with Logo & Official Colors
