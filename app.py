@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+from datetime import date
 
-# Page config for wide dashboard look
 st.set_page_config(page_title="Tsakane Dashboard", layout="wide", page_icon="🇿🇦")
 
-# Custom CSS for orange banner and cards
+# ================== CUSTOM STYLING ==================
 st.markdown("""
     <style>
     .tsakane-banner {
@@ -27,13 +26,10 @@ st.markdown("""
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         margin-bottom: 15px;
     }
-    .status-approved { background-color: #d4edda !important; color: #155724; }
-    .status-pending { background-color: #fff3cd !important; color: #856404; }
-    .status-processed { background-color: #cce5ff !important; color: #004085; }
     </style>
 """, unsafe_allow_html=True)
 
-# Solid orange banner
+# ================== ORANGE BANNER ==================
 st.markdown("""
     <div class="tsakane-banner">
         <h1 class="tsakane-title">Tsakane Dashboard</h1>
@@ -41,124 +37,114 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Sidebar Navigation
+# ================== SIDEBAR NAV ==================
 st.sidebar.title("NAVIGATION")
-st.sidebar.markdown("**Tsakane Operations**")
-
 nav_options = [
     "Sundry", "Fleet Services", "Receipts", "Invoices", "MOJAPAY",
     "TWF", "Registers", "Checklists", "Circulars", "Subsistence"
 ]
-
 selected_section = st.sidebar.radio("Main Sections", nav_options)
 
-# Show placeholder for selected section (we'll expand these later)
-if selected_section:
-    st.sidebar.info(f"Currently viewing: **{selected_section}**")
-    st.subheader(f"{selected_section} Section")
-    st.write(f"Content for **{selected_section}** will go here. Tell me what features to add (table, form, status tracker, etc.)")
-
-# Main Dashboard Overview
+# ================== DASHBOARD OVERVIEW (always visible) ==================
 st.subheader("Dashboard Overview")
-
-# KPI Cards row
 kpi_cols = st.columns(4)
+with kpi_cols[0]: st.metric("Pending Invoices", "1,342", "+48 today")
+with kpi_cols[1]: st.metric("Receipts This Month", "R 2.8M", "↑ 12%")
+with kpi_cols[2]: st.metric("Upcoming CIT Collections", "18", "Next: Tomorrow JHB")
+with kpi_cols[3]: st.metric("Subsistence Claims Pending", "92", "Total: 456")
 
-with kpi_cols[0]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric("Pending Invoices", "1,342", delta="+48 today")
-    st.markdown('</div>', unsafe_allow_html=True)
+# ================== SUNDRY TABLE (your requested table) ==================
+if selected_section == "Sundry":
+    st.subheader("🧾 Sundry – Witness Fees & Transport Claims")
+    st.caption("Fill the form below → Return Trip, PAYE and Gross calculate automatically")
 
-with kpi_cols[1]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric("Receipts This Month", "R 2.8M", delta="↑ 12%")
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Initialize table in session state
+    if "sundry_df" not in st.session_state:
+        st.session_state.sundry_df = pd.DataFrame(columns=[
+            "#", "DATE", "DISTRICT VOUCHER", "REGIONAL VOUCHER", "PAYEE",
+            "CASE NUMBER", "SINGLE TRIP", "RETURN TRIP", "MODE OF TRANSP",
+            "VOUCHER", "PAYE", "LUNCH", "GROSS"
+        ])
 
-with kpi_cols[2]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric("Upcoming CIT Collections", "18", delta="Next: Tomorrow JHB")
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Add new entry form
+    with st.form("sundry_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            entry_date = st.date_input("DATE", value=date.today())
+            dist_voucher = st.text_input("DISTRICT VOUCHER")
+            reg_voucher = st.text_input("REGIONAL VOUCHER")
+            payee = st.text_input("PAYEE")
+            case_number = st.text_input("CASE NUMBER")
+        with col2:
+            single_trip = st.number_input("SINGLE TRIP (R)", min_value=0.0, step=10.0, format="%.2f")
+            mode_transport = st.selectbox("MODE OF TRANSP", ["Private", "Taxi", "Bus"])
+            lunch = st.number_input("LUNCH (R)", min_value=0.0, step=10.0, format="%.2f")
+            voucher = st.text_input("VOUCHER")
 
-with kpi_cols[3]:
-    st.markdown('<div class="kpi-card">', unsafe_allow_html=True)
-    st.metric("Subsistence Claims Pending", "92", delta="Total: 456")
-    st.markdown('</div>', unsafe_allow_html=True)
+        submitted = st.form_submit_button("✅ Add Entry")
 
-# Charts row
-chart_cols = st.columns(2)
+        if submitted:
+            return_trip = single_trip * 2
+            paye_amount = return_trip * 0.25 if mode_transport == "Private" else 0.0
+            gross_amount = lunch + return_trip - paye_amount
 
-with chart_cols[0]:
-    st.subheader("Transactions by Category")
-    category_data = pd.DataFrame({
-        "Category": ["Invoices", "Receipts", "Fleet", "Subsistence", "Sundry", "Other"],
-        "Count": [850, 620, 310, 280, 190, 120]
-    })
-    fig_bar = px.bar(
-        category_data,
-        x="Category",
-        y="Count",
-        color="Category",
-        title="Monthly Volume"
-    )
-    st.plotly_chart(fig_bar, use_container_width=True)
+            new_row = {
+                "#": len(st.session_state.sundry_df) + 1,
+                "DATE": entry_date,
+                "DISTRICT VOUCHER": dist_voucher,
+                "REGIONAL VOUCHER": reg_voucher,
+                "PAYEE": payee,
+                "CASE NUMBER": case_number,
+                "SINGLE TRIP": single_trip,
+                "RETURN TRIP": return_trip,
+                "MODE OF TRANSP": mode_transport,
+                "VOUCHER": voucher,
+                "PAYE": paye_amount,
+                "LUNCH": lunch,
+                "GROSS": gross_amount
+            }
 
-with chart_cols[1]:
-    st.subheader("Status Breakdown")
-    status_data = pd.DataFrame({
-        "Status": ["Processed", "In Progress", "Pending Approval", "Draft"],
-        "Count": [2340, 1782, 1596, 450]
-    })
-    fig_donut = px.pie(
-        status_data,
-        values="Count",
-        names="Status",
-        hole=0.4,
-        title="Overall Status",
-        color_discrete_sequence=px.colors.sequential.Oranges
-    )
-    st.plotly_chart(fig_donut, use_container_width=True)
+            st.session_state.sundry_df = pd.concat(
+                [st.session_state.sundry_df, pd.DataFrame([new_row])],
+                ignore_index=True
+            )
+            st.success("Entry added successfully!")
 
-# Recent Items Table
-st.subheader("Recent / My Items")
+    # Display the live table
+    if not st.session_state.sundry_df.empty:
+        # Nice currency formatting
+        styled_df = st.session_state.sundry_df.style.format({
+            "SINGLE TRIP": "R{:,.2f}",
+            "RETURN TRIP": "R{:,.2f}",
+            "PAYE": "R{:,.2f}",
+            "LUNCH": "R{:,.2f}",
+            "GROSS": "R{:,.2f}"
+        }).set_properties(**{'text-align': 'right'}, subset=["SINGLE TRIP", "RETURN TRIP", "PAYE", "LUNCH", "GROSS"])
 
-recent_df = pd.DataFrame({
-    "ID": ["INV-0042", "REC-1289", "FLEET-567", "SUB-091", "SUN-312"],
-    "Description": ["Electricity Supplier Invoice", "Court Fees Collection", "Vehicle Maintenance Claim", "Travel Subsistence", "Sundry Payment"],
-    "Amount": ["R 45,200", "R 12,500", "R 8,900", "R 3,200", "R 1,800"],
-    "Status": ["Pending Approval", "Processed", "Draft", "Approved", "In Progress"]
-})
+        st.dataframe(styled_df, use_container_width=True, height=400)
 
-# Apply color styling to Status column
-def style_status(val):
-    if val == "Approved":
-        return "status-approved"
-    elif val == "Pending Approval":
-        return "status-pending"
-    elif val == "Processed":
-        return "status-processed"
-    return ""
+        # Total summary
+        total_gross = st.session_state.sundry_df["GROSS"].sum()
+        st.metric("💰 TOTAL MONEY SPENT ON WITNESS FEES (Gross)", f"R {total_gross:,.2f}")
 
-styled_df = recent_df.style.applymap(style_status, subset=["Status"])
+        # Download button
+        csv = st.session_state.sundry_df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download as CSV (Excel)",
+            data=csv,
+            file_name="Tsakane_Sundry_Witness_Fees.csv",
+            mime="text/csv"
+        )
 
-st.dataframe(styled_df, use_container_width=True)
+        if st.button("🗑️ Clear All Entries"):
+            st.session_state.sundry_df = pd.DataFrame(columns=st.session_state.sundry_df.columns)
+            st.rerun()
+    else:
+        st.info("No entries yet. Use the form above to start adding witness fees.")
 
-# Interactive Team Communication
-st.subheader("💬 Team Communication")
-
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "assistant", "content": "Welcome to Tsakane Dashboard! How can the team help today?"}
-    ]
-
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-if prompt := st.chat_input("Type your message or question to the team..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    # Simple echo response for demo (in real version could integrate logic)
-    st.session_state.messages.append({"role": "assistant", "content": f"Thanks for the message! Noted: '{prompt}'"})
-    st.rerun()
+else:
+    st.subheader(f"{selected_section} Section")
+    st.info("This section is coming soon. Tell me what you want to add next!")
 
 # Footer
 st.markdown("---")
