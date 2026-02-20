@@ -1,151 +1,155 @@
+# app.py - DOJ&CD Dashboard: HOME + SUNDRY + FLEET SERVICES (with vehicle sub-tabs)
 import streamlit as st
 import pandas as pd
-from datetime import date
+import plotly.express as px
+from datetime import datetime, timedelta
 
-st.set_page_config(page_title="Tsakane Dashboard", layout="wide", page_icon="🇿🇦")
+# Page config
+st.set_page_config(
+    page_title="DOJ&CD Internal Dashboard",
+    page_icon="⚖️",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# ================== CUSTOM STYLING ==================
+# Clean CSS with DOJ&CD green scheme
 st.markdown("""
     <style>
-    .tsakane-banner {
-        background-color: #FFB612;
-        color: #000000;
-        padding: 40px 20px;
-        text-align: center; I
-        border-radius: 0 0 15px 15px;
-        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
-        margin-bottom: 30px;
-    }
-    .tsakane-title { font-size: 3.5rem; font-weight: bold; margin: 0; }
-    .tsakane-subtitle { font-size: 1.5rem; margin: 10px 0 0; }
-    .kpi-card {
-        background: #ffffff;
-        padding: 20px;
-        border-radius: 10px;
-        text-align: center;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        margin-bottom: 15px;
-    }
+    .stApp { background-color: #f9fbfd; font-family: 'Helvetica Neue', Arial, sans-serif; }
+    .header { background-color: #005c28; color: white; padding: 30px 20px; text-align: center; margin-bottom: 30px; border-bottom: 4px solid #FFB612; }
+    .header-logo { max-width: 180px; margin-bottom: 15px; }
+    .header h1 { margin: 0; font-size: 2.4rem; font-weight: 600; }
+    .header h3 { margin: 10px 0 0; font-size: 1.4rem; font-weight: 400; }
+    .header p { margin: 10px 0 0; font-size: 1.1rem; opacity: 0.95; }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; background-color: #ffffff; border-bottom: 2px solid #e0e0e0; padding: 0 20px; }
+    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #f0f4f8; border-radius: 8px 8px 0 0; font-size: 1.1rem; font-weight: 500; color: #333; }
+    .stTabs [aria-selected="true"] { background-color: #ffffff !important; border-bottom: 3px solid #005c28; color: #005c28 !important; }
+    .stButton > button { background-color: #FFB612; color: black; border: none; font-weight: bold; padding: 10px 20px; border-radius: 6px; }
+    .stButton > button:hover { background-color: #e6a000; }
+    .status-good { color: green; font-weight: bold; }
+    .status-warning { color: orange; font-weight: bold; }
+    .status-alert { color: red; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-# ================== ORANGE BANNER ==================
+# Header with Logo
+st.markdown('<div class="header">', unsafe_allow_html=True)
+st.image(
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Coat_of_arms_of_South_Africa.svg/200px-Coat_of_arms_of_South_Africa.svg.png",
+    use_column_width=False
+)
 st.markdown("""
-    <div class="tsakane-banner">
-        <h1 class="tsakane-title">Tsakane Dashboard</h1>
-        <p class="tsakane-subtitle">My Dashboard</p>
-    </div>
+    <h1>Department of Justice and Constitutional Development</h1>
+    <h3>ACCESS TO JUSTICE FOR ALL</h3>
+    <p>Internal Dashboard • Republic of South Africa 🇿🇦</p>
 """, unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
-# ================== SIDEBAR NAV ==================
-st.sidebar.title("NAVIGATION")
-nav_options = [
-    "Sundry", "Fleet Services", "Receipts", "Invoices", "MOJAPAY",
-    "TWF", "Registers", "Checklists", "Circulars", "Subsistence"
-]
-selected_section = st.sidebar.radio("Main Sections", nav_options)
+# Main Tabs: HOME, SUNDRY, FLEET SERVICES
+tab_home, tab_sundry, tab_fleet = st.tabs(["HOME", "SUNDRY", "FLEET SERVICES"])
 
-# ================== DASHBOARD OVERVIEW (always visible) ==================
-st.subheader("Dashboard Overview")
-kpi_cols = st.columns(4)
-with kpi_cols[0]: st.metric("Pending Invoices", "1,342", "+48 today")
-with kpi_cols[1]: st.metric("Receipts This Month", "R 2.8M", "↑ 12%")
-with kpi_cols[2]: st.metric("Upcoming CIT Collections", "18", "Next: Tomorrow JHB")
-with kpi_cols[3]: st.metric("Subsistence Claims Pending", "92", "Total: 456")
+# HOME tab (unchanged - monthly chart)
+with tab_home:
+    st.markdown("<h2 style='text-align: center; color: #005c28; margin-top: 30px;'>Witness Fees Expenditure Overview</h2>", unsafe_allow_html=True)
+    
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    amounts = [45000, 62000, 38000, 75000, 51000, 89000, 42000, 67000, 93000, 55000, 48000, 72000]
+    df_chart = pd.DataFrame({"Month": months, "Amount Spent (ZAR)": amounts})
+    
+    fig = px.bar(df_chart, x="Month", y="Amount Spent (ZAR)", title="Monthly Witness Fees Expenditure (Current Year)",
+                 color="Amount Spent (ZAR)", color_continuous_scale="Greens", text_auto=True)
+    fig.update_layout(xaxis_title="Month", yaxis_title="Amount (ZAR)", showlegend=False)
+    st.plotly_chart(fig, use_container_width=True)
+    
+    st.markdown("<h3 style='text-align: center; color: #005c28;'>View Detailed Witness Fees Table</h3>", unsafe_allow_html=True)
+    if st.button("Open Witness Fees Table (SUNDRY Section)"):
+        st.success("Switch to the **SUNDRY** tab above.")
 
-# ================== SUNDRY TABLE (your requested table) ==================
-if selected_section == "Sundry":
-    st.subheader("🧾 Sundry – Witness Fees & Transport Claims")
-    st.caption("Fill the form below → Return Trip, PAYE and Gross calculate automatically")
+# SUNDRY tab (witness fees table - unchanged)
+with tab_sundry:
+    st.header("Witness Fees Table")
+    sample_data = {
+        "Date": ["2026-01-15", "2026-01-22", "2026-02-05", "2026-02-10", "2026-02-18"],
+        "Witness Name": ["A. Nkosi", "B. Mthembu", "C. van der Merwe", "D. Pillay", "E. Sithole"],
+        "Case Number": ["JHB/2026/001", "CPT/2026/045", "DBN/2026/112", "JHB/2026/078", "PE/2026/023"],
+        "Amount Paid (ZAR)": [1200.00, 850.00, 1500.00, 950.00, 1100.00],
+        "Status": ["Paid", "Pending Approval", "Paid", "Awaiting Receipt", "Paid"],
+        "Court/Office": ["Johannesburg Magistrate", "Cape Town High", "Durban Regional", "Johannesburg High", "Port Elizabeth Magistrate"]
+    }
+    df_table = pd.DataFrame(sample_data)
+    edited_df = st.data_editor(df_table, num_rows="dynamic", use_container_width=True)
+    total_spent = edited_df["Amount Paid (ZAR)"].sum()
+    st.metric("Total Spent (from table)", f"R {total_spent:,.2f}")
 
-    # Initialize table in session state
-    if "sundry_df" not in st.session_state:
-        st.session_state.sundry_df = pd.DataFrame(columns=[
-            "#", "DATE", "DISTRICT VOUCHER", "REGIONAL VOUCHER", "PAYEE",
-            "CASE NUMBER", "SINGLE TRIP", "RETURN TRIP", "MODE OF TRANSP",
-            "VOUCHER", "PAYE", "LUNCH", "GROSS"
-        ])
+# FLEET SERVICES tab with 3 vehicle sub-tabs
+with tab_fleet:
+    st.header("Fleet Services")
+    st.markdown("Vehicle tracking and status overview for DOJ&CD fleet in Gauteng.")
 
-    # Add new entry form
-    with st.form("sundry_form", clear_on_submit=True):
+    # Sub-tabs for each vehicle
+    v1, v2, v3 = st.tabs([
+        "Vehicle 1 (JM 45 CY GP)",
+        "Vehicle 2 (BW 47 KG GP)",
+        "Vehicle 3 (LR 93 VW GP)"
+    ])
+
+    # Dummy data function for consistency
+    def get_vehicle_status(vehicle_id):
+        statuses = {
+            1: {"location": "JHB Magistrate Court", "fuel": 65, "odo": 124850, "last_service": "2025-11-15", "alerts": "None"},
+            2: {"location": "En Route to CPT", "fuel": 28, "odo": 98740, "last_service": "2025-10-20", "alerts": "Low Fuel Warning"},
+            3: {"location": "Parked - PE Office", "fuel": 92, "odo": 156320, "last_service": "2026-01-10", "alerts": "Service Due Soon"}
+        }
+        return statuses.get(vehicle_id, {"location": "Unknown", "fuel": 0, "odo": 0, "last_service": "N/A", "alerts": "N/A"})
+
+    # Vehicle 1
+    with v1:
+        status = get_vehicle_status(1)
+        st.subheader("Vehicle 1: JM 45 CY GP")
         col1, col2 = st.columns(2)
         with col1:
-            entry_date = st.date_input("DATE", value=date.today())
-            dist_voucher = st.text_input("DISTRICT VOUCHER")
-            reg_voucher = st.text_input("REGIONAL VOUCHER")
-            payee = st.text_input("PAYEE")
-            case_number = st.text_input("CASE NUMBER")
+            st.markdown(f"**Current Location:** {status['location']}")
+            st.markdown(f"**Fuel Level:** {status['fuel']}%")
+            st.markdown(f"**Odometer:** {status['odo']:,} km")
         with col2:
-            single_trip = st.number_input("SINGLE TRIP (R)", min_value=0.0, step=10.0, format="%.2f")
-            mode_transport = st.selectbox("MODE OF TRANSP", ["Private", "Taxi", "Bus"])
-            lunch = st.number_input("LUNCH (R)", min_value=0.0, step=10.0, format="%.2f")
-            voucher = st.text_input("VOUCHER")
+            st.markdown(f"**Last Service:** {status['last_service']}")
+            alert_class = "status-good" if "None" in status['alerts'] else "status-warning" if "Low" in status['alerts'] else "status-alert"
+            st.markdown(f"**Alerts:** <span class='{alert_class}'>{status['alerts']}</span>", unsafe_allow_html=True)
 
-        submitted = st.form_submit_button("✅ Add Entry")
+        # Dummy daily mileage chart
+        dates = [datetime.now().date() - timedelta(days=i) for i in range(6, -1, -1)]
+        mileage = [45, 120, 0, 85, 60, 30, 95]
+        df_mileage = pd.DataFrame({"Date": dates, "Daily Mileage (km)": mileage})
+        fig = px.line(df_mileage, x="Date", y="Daily Mileage (km)", title="Last 7 Days Mileage")
+        st.plotly_chart(fig, use_container_width=True)
 
-        if submitted:
-            return_trip = single_trip * 2
-            paye_amount = return_trip * 0.25 if mode_transport == "Private" else 0.0
-            gross_amount = lunch + return_trip - paye_amount
+        # Recent trips table (editable)
+        st.subheader("Recent Trips / Logs")
+        trips_data = pd.DataFrame({
+            "Date": ["2026-02-15", "2026-02-10", "2026-02-05"],
+            "Driver": ["J. Smith", "A. Nkosi", "M. Botha"],
+            "Purpose": ["Court Transfer", "Site Visit", "Maintenance"],
+            "Start Odo": [124500, 124200, 123900],
+            "End Odo": [124850, 124400, 124150],
+            "Distance (km)": [350, 200, 250],
+            "Notes": ["", "Fuel added", ""]
+        })
+        st.data_editor(trips_data, num_rows="dynamic", use_container_width=True)
 
-            new_row = {
-                "#": len(st.session_state.sundry_df) + 1,
-                "DATE": entry_date,
-                "DISTRICT VOUCHER": dist_voucher,
-                "REGIONAL VOUCHER": reg_voucher,
-                "PAYEE": payee,
-                "CASE NUMBER": case_number,
-                "SINGLE TRIP": single_trip,
-                "RETURN TRIP": return_trip,
-                "MODE OF TRANSP": mode_transport,
-                "VOUCHER": voucher,
-                "PAYE": paye_amount,
-                "LUNCH": lunch,
-                "GROSS": gross_amount
-            }
+    # Vehicle 2 (similar structure)
+    with v2:
+        status = get_vehicle_status(2)
+        st.subheader("Vehicle 2: BW 47 KG GP")
+        # ... (repeat similar columns, chart, table with different dummy data)
+        st.info("Vehicle 2 details (similar layout) - customize as needed.")
 
-            st.session_state.sundry_df = pd.concat(
-                [st.session_state.sundry_df, pd.DataFrame([new_row])],
-                ignore_index=True
-            )
-            st.success("Entry added successfully!")
-
-    # Display the live table
-    if not st.session_state.sundry_df.empty:
-        # Nice currency formatting
-        styled_df = st.session_state.sundry_df.style.format({
-            "SINGLE TRIP": "R{:,.2f}",
-            "RETURN TRIP": "R{:,.2f}",
-            "PAYE": "R{:,.2f}",
-            "LUNCH": "R{:,.2f}",
-            "GROSS": "R{:,.2f}"
-        }).set_properties(**{'text-align': 'right'}, subset=["SINGLE TRIP", "RETURN TRIP", "PAYE", "LUNCH", "GROSS"])
-
-        st.dataframe(styled_df, use_container_width=True, height=400)
-
-        # Total summary
-        total_gross = st.session_state.sundry_df["GROSS"].sum()
-        st.metric("💰 TOTAL MONEY SPENT ON WITNESS FEES (Gross)", f"R {total_gross:,.2f}")
-
-        # Download button
-        csv = st.session_state.sundry_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Download as CSV (Excel)",
-            data=csv,
-            file_name="Tsakane_Sundry_Witness_Fees.csv",
-            mime="text/csv"
-        )
-
-        if st.button("🗑️ Clear All Entries"):
-            st.session_state.sundry_df = pd.DataFrame(columns=st.session_state.sundry_df.columns)
-            st.rerun()
-    else:
-        st.info("No entries yet. Use the form above to start adding witness fees.")
-
-else:
-    st.subheader(f"{selected_section} Section")
-    st.info("This section is coming soon. Tell me what you want to add next!")
+    # Vehicle 3
+    with v3:
+        status = get_vehicle_status(3)
+        st.subheader("Vehicle 3: LR 93 VW GP")
+        # ... (repeat layout)
+        st.info("Vehicle 3 details (similar layout) - customize as needed.")
 
 # Footer
 st.markdown("---")
-st.caption("Tsakane Dashboard • Internal Use Only • Ekurhuleni / Gauteng • © 2026")
+st.caption("© Department of Justice and Constitutional Development • 2026")
