@@ -11,7 +11,7 @@ st.markdown("""
         background-color: #FFB612;
         color: #000000;
         padding: 40px 20px;
-        text-align: center;
+        text-align: center; I
         border-radius: 0 0 15px 15px;
         box-shadow: 0 6px 12px rgba(0,0,0,0.2);
         margin-bottom: 30px;
@@ -33,7 +33,7 @@ st.markdown("""
 st.markdown("""
     <div class="tsakane-banner">
         <h1 class="tsakane-title">Tsakane Dashboard</h1>
-        <p class="tsakane-subtitle">Mt Dashboard 🇿🇦</p>
+        <p class="tsakane-subtitle">My Dashboard 🇿🇦</p>
     </div>
 """, unsafe_allow_html=True)
 
