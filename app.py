@@ -33,7 +33,7 @@ st.markdown("""
 st.markdown("""
     <div class="tsakane-banner">
         <h1 class="tsakane-title">Tsakane Dashboard</h1>
-        <p class="tsakane-subtitle">My Dashboard 🇿🇦</p>
+        <p class="tsakane-subtitle">My Dashboard</p>
     </div>
 """, unsafe_allow_html=True)
 
