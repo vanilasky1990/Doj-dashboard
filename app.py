@@ -65,7 +65,7 @@ def estimate_next_service(status: Dict):
     return next_by_time.strftime("%Y-%m-%d"), next_by_km, km_remaining
 
 # ────────────────────────────────────────────────
-# Header
+# Header with fixed coat of arms URL
 # ────────────────────────────────────────────────
 st.markdown('<div class="header">', unsafe_allow_html=True)
 st.image(
@@ -224,11 +224,11 @@ with tab_fleet:
 
         current_trips = st.session_state[session_key].copy()
 
-        # Auto-calculate Distance before displaying
+        # Auto-calculate Distance before displaying (read-only)
         current_trips["Distance (km)"] = current_trips.apply(
             lambda row: max(0, row["End Odo"] - row["Start Odo"])
             if pd.notna(row["Start Odo"]) and pd.notna(row["End Odo"])
-            else row["Distance (km)"],
+            else row.get("Distance (km)", 0),
             axis=1
         )
 
@@ -273,7 +273,7 @@ with tab_fleet:
 
             with subtab_logs:
                 st.subheader(f"Recent trips / logs – {reg}")
-                st.caption("Add multiple toll rows with the same date but different times when you have several tolls in one day. Distance is auto-calculated from End Odo - Start Odo.")
+                st.caption("Distance is auto-calculated from End Odo - Start Odo (read-only). Add multiple toll rows for the same day with different times.")
 
                 column_config = {
                     "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD", required=True),
@@ -286,7 +286,7 @@ with tab_fleet:
                         "Distance (km)",
                         min_value=0,
                         format="%d km",
-                        disabled=True,  # ← read-only & auto-calculated
+                        disabled=True,  # Read-only & auto-calculated
                         help="Automatically calculated as End Odo - Start Odo"
                     ),
                     "Fuel Added (L)": st.column_config.NumberColumn("Fuel Added (L)", min_value=0.0, format="%.1f L"),
@@ -296,24 +296,50 @@ with tab_fleet:
                     "Toll Plaza / Notes": st.column_config.TextColumn("Toll Plaza / Notes")
                 }
 
-                edited_trips = st.data_editor(
-                    current_trips,
+                # Manual pagination (20 rows per page)
+                rows_per_page = 20
+                total_rows = len(current_trips)
+                total_pages = max(1, (total_rows + rows_per_page - 1) // rows_per_page)
+
+                # Page selector
+                col_left, col_center, col_right = st.columns([1, 4, 1])
+                with col_center:
+                    page = st.number_input(
+                        f"Page (1–{total_pages}) – Total {total_rows} entries",
+                        min_value=1,
+                        max_value=total_pages,
+                        value=1,
+                        step=1,
+                        format="%d",
+                        key=f"page_selector_{vid}"
+                    )
+
+                # Slice data for current page
+                start_idx = (page - 1) * rows_per_page
+                end_idx = start_idx + rows_per_page
+                page_data = current_trips.iloc[start_idx:end_idx]
+
+                edited_page = st.data_editor(
+                    page_data,
                     column_config=column_config,
                     num_rows="dynamic",
                     use_container_width=True,
                     hide_index=True,
-                    key=f"trips_log_vehicle_{vid}"
+                    key=f"trips_editor_page_{vid}_{page}"
                 )
 
-                # Save any edits back
-                st.session_state[session_key] = edited_trips
+                # Update full data from edited page (only current page)
+                if not edited_page.empty:
+                    current_trips.iloc[start_idx:end_idx] = edited_page
+                    st.session_state[session_key] = current_trips
 
-                st.metric("Number of log entries", len(edited_trips), delta=None)
+                st.caption(f"Showing rows {start_idx+1}–{min(end_idx, total_rows)} of {total_rows}")
+                st.metric("Total log entries", total_rows, delta=None)
 
-                if not edited_trips.empty:
-                    total_distance = edited_trips["Distance (km)"].sum()
-                    total_fuel_cost = edited_trips["Fuel Cost (R)"].sum()
-                    total_tolls = edited_trips["Toll Amount (R)"].sum()
+                if total_rows > 0:
+                    total_distance = current_trips["Distance (km)"].sum()
+                    total_fuel_cost = current_trips["Fuel Cost (R)"].sum()
+                    total_tolls = current_trips["Toll Amount (R)"].sum()
 
                     colA, colB, colC = st.columns(3)
                     colA.metric("Total Distance", f"{total_distance:,} km")
@@ -340,7 +366,7 @@ with tab_fleet:
                                 "Purpose": "Refuelling",
                                 "Start Odo": fuel_odo,
                                 "End Odo": fuel_odo,
-                                "Distance (km)": fuel_odo - fuel_odo,  # 0
+                                "Distance (km)": 0,
                                 "Fuel Added (L)": fuel_litres,
                                 "Fuel Cost (R)": fuel_cost,
                                 "Odo at Refuel": fuel_odo,
