@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 # Page config
 st.set_page_config(
-    page_title="DOJ&CD Internal Dashboard",
+    page_title="MC Tsakane - Dashboard",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="collapsed"
