@@ -41,7 +41,7 @@ st.image(
 st.markdown("""
     <h1>My Dashboard</h1>
     <h3>ACCESS TO JUSTICE FOR ALL</h3>
-    <p>Internal Dashboard • Republic of South Africa 🇿🇦</p>
+    <p>Internal Dashboard</p>
 """, unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
