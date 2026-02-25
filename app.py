@@ -1,54 +1,49 @@
-import streamlit as st
-import packaging.version
-
-def get_streamlit_version():
-    """Return current Streamlit version as packaging.version.Version object"""
-    return packaging.version.parse(st.__version__)
-
-# Optional: Check once at startup
-STREAMLIT_VERSION = get_streamlit_version()
-HAS_WIDGET_KEYS_ON_PROGRESS = STREAMLIT_VERSION >= packaging.version.parse("1.35.0")  # approximate – adjust if you know exact
-HAS_WIDGET_KEYS_ON_METRIC   = False  # From docs → still no key on metric even in 1.54
-
-# Then in your fleet loop, conditionally add key only where safe:
-# Example for progress (if you upgrade later):
-# if HAS_WIDGET_KEYS_ON_PROGRESS:
-#     c2.progress(status["fuel"] / 100, key=f"fuel_prog_{vid}")
-# else:
-c2.progress(status["fuel"] / 100)
-
-# For metric → always without key for now
-st.metric("Total distance (shown trips)", f"{tot_km:,} km") Dict
-
 # ────────────────────────────────────────────────
-# Page config
-# ────────────────────────────────────────────────
-st.set_page_config(
-    page_title="DOJ&CD - MC Tsakane Dashboard",
-    page_icon="⚖️",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
-
-# ────────────────────────────────────────────────
-# Basic styling
+# Updated CSS for solid orange header
 # ────────────────────────────────────────────────
 st.markdown("""
     <style>
     .stApp { background-color: #f9fbfd; }
     .header { 
-        background-color: #005c28; 
-        color: white; 
-        padding: 20px; 
+        background-color: #FFB612;          /* solid orange/yellow */
+        color: #1a1a1a;                     /* dark text for contrast */
+        padding: 25px 20px; 
         text-align: center; 
-        border-bottom: 4px solid #FFB612; 
+        border-bottom: 4px solid #005c28;   /* green bottom border for contrast */
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-    .status-good    { color: green;    font-weight: bold; }
-    .status-warning { color: orange;   font-weight: bold; }
-    .status-alert   { color: red;      font-weight: bold; }
+    .header h1 { 
+        margin: 0; 
+        font-size: 2.5rem; 
+        font-weight: 700; 
+    }
+    .header h3 { 
+        margin: 8px 0 0; 
+        font-size: 1.4rem; 
+        font-weight: 400; 
+    }
+    .header p { 
+        margin: 8px 0 0; 
+        font-size: 1.1rem; 
+        opacity: 0.9; 
+    }
     </style>
 """, unsafe_allow_html=True)
 
+# ────────────────────────────────────────────────
+# Header with solid orange background
+# ────────────────────────────────────────────────
+st.markdown('<div class="header">', unsafe_allow_html=True)
+st.image(
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Coat_of_arms_of_South_Africa.svg/200px-Coat_of_arms_of_South_Africa.svg.png",
+    width=140
+)
+st.markdown(f"""
+    <h1>MC Tsakane Dashboard</h1>
+    <h3>Department of Justice and Constitutional Development</h3>
+    <p>Internal Use • {datetime.now().year}</p>
+""", unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 # ────────────────────────────────────────────────
 # Vehicle status lookup
 # ────────────────────────────────────────────────
