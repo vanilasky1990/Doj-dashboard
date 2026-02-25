@@ -49,7 +49,7 @@ def get_vehicle_status(vehicle_id: int) -> Dict:
     return data.get(vehicle_id, {"location": "Unknown", "fuel": 0, "odo": 0, "last_service": "N/A", "alerts": "N/A"})
 
 # ────────────────────────────────────────────────
-# Estimate next service (15,000 km rule)
+# Estimate next service (6 months OR 15,000 km rule)
 # ────────────────────────────────────────────────
 def estimate_next_service(status: Dict):
     last_date_str = status["last_service"]
@@ -184,7 +184,7 @@ with tab_sundry:
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
 
 # ================================================
-# FLEET SERVICES tab – full version with all requested changes
+# FLEET SERVICES tab – with fix for duplicate chart ID
 # ================================================
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
@@ -237,9 +237,7 @@ with tab_fleet:
             c3.markdown(f"**Last service**  \n{status['last_service']}")
             c3.markdown(f"**Alerts**  \n<span class='{alert_cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
 
-            # ────────────────────────────────────────────────
-            # Mileage Trend – now using REAL data from table
-            # ────────────────────────────────────────────────
+            # Mileage Trend – real data from table
             st.subheader("Mileage Trend (last 14 days)")
             if not current_trips.empty:
                 df_trips = current_trips.copy()
@@ -261,9 +259,7 @@ with tab_fleet:
             fig.update_layout(margin=dict(l=20, r=20, t=40, b=20), height=300)
             st.plotly_chart(fig, use_container_width=True, key=f"mileage_chart_vehicle_{vid}")
 
-            # ────────────────────────────────────────────────
             # Trip Logs + Monthly Report sub-tabs
-            # ────────────────────────────────────────────────
             subtab_logs, subtab_report = st.tabs(["Trip Logs", "Monthly Report"])
 
             with subtab_logs:
@@ -296,7 +292,6 @@ with tab_fleet:
 
                 st.session_state[session_key] = edited_trips
 
-                # Show number of entries
                 st.metric("Number of log entries", len(edited_trips), delta=None)
 
                 if not edited_trips.empty:
@@ -309,7 +304,6 @@ with tab_fleet:
                     colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}")
                     colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}")
 
-                # Add Fuel Slip
                 with st.expander("➕ Add Fuel Slip", expanded=False):
                     with st.form(key=f"add_fuel_form_{vid}"):
                         col_date, col_odo = st.columns(2)
@@ -345,7 +339,6 @@ with tab_fleet:
                             st.success("Fuel slip added!")
                             st.rerun()
 
-                # Add Toll Slip
                 with st.expander("➕ Add Toll Slip", expanded=False):
                     st.caption("For multiple tolls on the same day → submit the form multiple times with different times.")
                     
@@ -401,7 +394,12 @@ with tab_fleet:
 
                     fig_month = px.bar(monthly, x='Month', y=['Distance (km)', 'Fuel Cost (R)', 'Toll Amount (R)'],
                                       barmode='group', title="Monthly Summary")
-                    st.plotly_chart(fig_month, use_container_width=True)
+
+                    st.plotly_chart(
+                        fig_month,
+                        use_container_width=True,
+                        key=f"monthly_report_chart_vehicle_{vid}"  # ← This fixes the duplicate ID error
+                    )
                 else:
                     st.info("No trip data yet. Add entries in the Trip Logs tab.")
 
