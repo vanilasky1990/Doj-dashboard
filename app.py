@@ -185,7 +185,7 @@ with tab_sundry:
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
 
 # ================================================
-# FLEET SERVICES TAB – with pagination (20 rows/page)
+# FLEET SERVICES TAB – with manual pagination (20 rows/page)
 # ================================================
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
@@ -282,25 +282,54 @@ with tab_fleet:
                     "Toll Plaza / Notes": st.column_config.TextColumn("Toll Plaza / Notes")
                 }
 
-                edited_trips = st.data_editor(
-                    current_trips,
+                # ────────────────────────────────────────────────
+                # Manual pagination (20 rows per page)
+                # ────────────────────────────────────────────────
+                rows_per_page = 20
+                total_rows = len(current_trips)
+                total_pages = max(1, (total_rows + rows_per_page - 1) // rows_per_page)
+
+                # Page selector
+                col_left, col_center, col_right = st.columns([1, 4, 1])
+                with col_center:
+                    page = st.number_input(
+                        f"Page (1–{total_pages}) – Total {total_rows} entries",
+                        min_value=1,
+                        max_value=total_pages,
+                        value=1,
+                        step=1,
+                        format="%d",
+                        key=f"page_selector_{vid}"
+                    )
+
+                # Slice data for current page
+                start_idx = (page - 1) * rows_per_page
+                end_idx = start_idx + rows_per_page
+                page_data = current_trips.iloc[start_idx:end_idx]
+
+                edited_page = st.data_editor(
+                    page_data,
                     column_config=column_config,
                     num_rows="dynamic",
                     use_container_width=True,
                     hide_index=True,
-                    key=f"trips_log_vehicle_{vid}",
-                    pagination=True,                  # ← enables pagination
-                    pagination_page_size=20           # ← 20 rows per page
+                    key=f"trips_editor_page_{vid}_{page}"
                 )
 
-                st.session_state[session_key] = edited_trips
+                # Show visible range
+                st.caption(f"Showing rows {start_idx+1}–{min(end_idx, total_rows)} of {total_rows}")
 
-                st.metric("Number of log entries", len(edited_trips), delta=None)
+                # Update full data from edited page (only affects current page)
+                if not edited_page.empty:
+                    current_trips.iloc[start_idx:end_idx] = edited_page
+                    st.session_state[session_key] = current_trips
 
-                if not edited_trips.empty:
-                    total_distance = edited_trips["Distance (km)"].sum()
-                    total_fuel_cost = edited_trips["Fuel Cost (R)"].sum()
-                    total_tolls = edited_trips["Toll Amount (R)"].sum()
+                st.metric("Total log entries", total_rows, delta=None)
+
+                if total_rows > 0:
+                    total_distance = current_trips["Distance (km)"].sum()
+                    total_fuel_cost = current_trips["Fuel Cost (R)"].sum()
+                    total_tolls = current_trips["Toll Amount (R)"].sum()
 
                     colA, colB, colC = st.columns(3)
                     colA.metric("Total Distance", f"{total_distance:,} km")
