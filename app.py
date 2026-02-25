@@ -122,6 +122,7 @@ with tab_sundry:
 
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
+    st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips.")
 
     vehicles = [
         {"id": 1, "reg": "JM 45 CY GP", "short": "Vehicle 1"},
@@ -140,6 +141,7 @@ with tab_fleet:
         with tab:
             st.markdown(f"### {reg}")
 
+            # Status overview
             c1, c2, c3 = st.columns([2, 2, 1.4])
 
             c1.markdown(f"**Current location**  \n{status['location']}")
@@ -154,35 +156,36 @@ with tab_fleet:
             c3.markdown(f"**Last service**  \n{status['last_service']}")
             c3.markdown(f"**Alerts**  \n<span class='{alert_cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
 
-            # ────────────────────────────────────────────────
-            # Mileage chart – ADD UNIQUE KEY HERE
+            # Mileage chart with UNIQUE KEY to fix duplicate ID error
             dates = [datetime.now().date() - timedelta(days=x) for x in range(13, -1, -1)]
-            km_list = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]  # dummy – same for all now
+            km_list = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]  # dummy data
             df_mileage = pd.DataFrame({"Date": dates, "Daily km": km_list})
-            fig = px.line(df_mileage, x="Date", y="Daily km", title="Last 14 days mileage")
+            fig = px.line(df_mileage, x="Date", y="Daily km", title="Last 14 days mileage trend")
             fig.update_traces(line_color="#005c28")
+            fig.update_layout(margin=dict(l=20, r=20, t=40, b=20), height=300)
 
             st.plotly_chart(
                 fig,
                 use_container_width=True,
-                key=f"mileage_chart_vehicle_{vid}"   # ← This fixes the duplicate ID
+                key=f"fleet_mileage_chart_{vid}"   # ← Critical fix: unique per vehicle
             )
 
-            # Trips log (add key here too for safety)
-            st.subheader("Recent trips")
+            # Recent trips table with unique key (good practice)
+            st.subheader("Recent trips / logs")
             trips_data = pd.DataFrame({
-                "Date":      ["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"],
-                "Driver":    ["J. Smith", "A. Nkosi", "M. Botha", "S. Naidoo"],
-                "Purpose":   ["Court appearance", "Site inspection", "Maintenance", "Transfer"],
+                "Date": ["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"],
+                "Driver": ["J. Smith", "A. Nkosi", "M. Botha", "S. Naidoo"],
+                "Purpose": ["Court appearance", "Site inspection", "Maintenance", "Vehicle transfer"],
                 "Start Odo": [124600, 124500, 124200, 123900],
-                "End Odo":   [124950, 124850, 124400, 124150],
-                "Distance":  [350, 350, 200, 250],
+                "End Odo": [124950, 124850, 124400, 124150],
+                "Distance (km)": [350, 350, 200, 250],
+                "Notes": ["", "Refuelled 40L", "", "Tyre check completed"]
             })
             st.data_editor(
                 trips_data,
                 num_rows="dynamic",
                 use_container_width=True,
-                key=f"trips_log_vehicle_{vid}"       # ← optional but recommended
+                key=f"fleet_trips_editor_{vid}"   # ← Unique key here too
             )
 # ────────────────────────────────────────────────
 # Footer
