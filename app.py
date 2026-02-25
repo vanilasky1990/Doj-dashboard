@@ -50,22 +50,20 @@ def get_vehicle_status(vehicle_id: int) -> Dict:
     return data.get(vehicle_id, {"location": "Unknown", "fuel": 0, "odo": 0, "last_service": "N/A", "alerts": "N/A"})
 
 # ────────────────────────────────────────────────
-# Estimate next service (6 months OR 15,000 km rule)
+# Estimate next service
 # ────────────────────────────────────────────────
 def estimate_next_service(status: Dict):
-    last_date_str = status["last_service"]
-    last_date = datetime.strptime(last_date_str, "%Y-%m-%d").date()
+    last_date = datetime.strptime(status["last_service"], "%Y-%m-%d").date()
+    next_by_time = last_date + timedelta(days=180)
     
-    next_by_time = last_date + timedelta(days=180)  # 6 months
-    
-    km_since_last_service = status["odo"] % 15000
-    km_remaining = 15000 - km_since_last_service
+    km_since = status["odo"] % 15000
+    km_remaining = 15000 - km_since
     next_by_km = f"+{km_remaining:,} km"
     
     return next_by_time.strftime("%Y-%m-%d"), next_by_km, km_remaining
 
 # ────────────────────────────────────────────────
-# Header with fixed coat of arms URL
+# Header with reliable coat of arms
 # ────────────────────────────────────────────────
 st.markdown('<div class="header">', unsafe_allow_html=True)
 st.image(
@@ -84,9 +82,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 # ────────────────────────────────────────────────
 tab_home, tab_sundry, tab_fleet = st.tabs(["HOME", "SUNDRY", "FLEET SERVICES"])
 
-# ================================================
 # HOME TAB
-# ================================================
 with tab_home:
     st.subheader("Witness Fees – Monthly Expenditure Overview")
 
@@ -99,10 +95,9 @@ with tab_home:
     fig.update_layout(showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
 
-    # Fleet Health & Service Overview
     st.markdown("---")
     st.subheader("🚗 Fleet Health & Service Overview")
-    st.markdown("Current status and estimated next service (6 months **or** 15,000 km interval).")
+    st.markdown("Current status and estimated next service (6 months or 15,000 km interval).")
 
     vehicles = [
         {"id": 1, "reg": "JM 45 CY GP"},
@@ -159,9 +154,7 @@ with tab_home:
 
     st.caption("Next service triggered by whichever comes first: 6 months or 15,000 km since last service.")
 
-# ================================================
 # SUNDRY TAB
-# ================================================
 with tab_sundry:
     st.subheader("Witness Fees Register")
 
@@ -184,12 +177,10 @@ with tab_sundry:
     col1.metric("Total Spent", f"R {total_spent:,.2f}")
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
 
-# ================================================
-# FLEET SERVICES TAB – with auto-calculated Distance (read-only)
-# ================================================
+# FLEET SERVICES TAB – fixed duplication & auto-distance
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
-    st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips/logs (multiple tolls per day supported).")
+    st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips/logs.")
 
     vehicles = [
         {"id": 1, "reg": "JM 45 CY GP", "short": "Vehicle 1"},
@@ -224,7 +215,7 @@ with tab_fleet:
 
         current_trips = st.session_state[session_key].copy()
 
-        # Auto-calculate Distance before displaying (read-only)
+        # Auto-calculate Distance (read-only)
         current_trips["Distance (km)"] = current_trips.apply(
             lambda row: max(0, row["End Odo"] - row["Start Odo"])
             if pd.notna(row["Start Odo"]) and pd.notna(row["End Odo"])
@@ -246,7 +237,7 @@ with tab_fleet:
             c3.markdown(f"**Last service**  \n{status['last_service']}")
             c3.markdown(f"**Alerts**  \n<span class='{alert_cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
 
-            # Mileage Trend – real data from table
+            # Mileage Trend
             st.subheader("Mileage Trend (last 14 days)")
             if not current_trips.empty:
                 df_trips = current_trips.copy()
@@ -268,16 +259,15 @@ with tab_fleet:
             fig.update_layout(margin=dict(l=20, r=20, t=40, b=20), height=300)
             st.plotly_chart(fig, use_container_width=True, key=f"mileage_chart_vehicle_{vid}")
 
-            # Trip Logs + Monthly Report sub-tabs
             subtab_logs, subtab_report = st.tabs(["Trip Logs", "Monthly Report"])
 
             with subtab_logs:
                 st.subheader(f"Recent trips / logs – {reg}")
-                st.caption("Distance is auto-calculated from End Odo - Start Odo (read-only). Add multiple toll rows for the same day with different times.")
+                st.caption("Distance is automatically calculated from End Odo - Start Odo (read-only).")
 
                 column_config = {
                     "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD", required=True),
-                    "Time": st.column_config.TimeColumn("Time", format="HH:mm", step=60, help="Approximate time of toll payment"),
+                    "Time": st.column_config.TimeColumn("Time", format="HH:mm", step=60),
                     "Driver": st.column_config.TextColumn("Driver", required=True),
                     "Purpose": st.column_config.TextColumn("Purpose"),
                     "Start Odo": st.column_config.NumberColumn("Start Odo", min_value=0, format="%d km"),
@@ -286,8 +276,8 @@ with tab_fleet:
                         "Distance (km)",
                         min_value=0,
                         format="%d km",
-                        disabled=True,  # Read-only & auto-calculated
-                        help="Automatically calculated as End Odo - Start Odo"
+                        disabled=True,
+                        help="Auto-calculated: End Odo - Start Odo"
                     ),
                     "Fuel Added (L)": st.column_config.NumberColumn("Fuel Added (L)", min_value=0.0, format="%.1f L"),
                     "Fuel Cost (R)": st.column_config.NumberColumn("Fuel Cost (R)", min_value=0.0, format="R %.2f"),
@@ -296,12 +286,11 @@ with tab_fleet:
                     "Toll Plaza / Notes": st.column_config.TextColumn("Toll Plaza / Notes")
                 }
 
-                # Manual pagination (20 rows per page)
+                # Pagination
                 rows_per_page = 20
                 total_rows = len(current_trips)
                 total_pages = max(1, (total_rows + rows_per_page - 1) // rows_per_page)
 
-                # Page selector
                 col_left, col_center, col_right = st.columns([1, 4, 1])
                 with col_center:
                     page = st.number_input(
@@ -314,10 +303,9 @@ with tab_fleet:
                         key=f"page_selector_{vid}"
                     )
 
-                # Slice data for current page
                 start_idx = (page - 1) * rows_per_page
                 end_idx = start_idx + rows_per_page
-                page_data = current_trips.iloc[start_idx:end_idx]
+                page_data = current_trips.iloc[start_idx:end_idx].copy()
 
                 edited_page = st.data_editor(
                     page_data,
@@ -328,9 +316,12 @@ with tab_fleet:
                     key=f"trips_editor_page_{vid}_{page}"
                 )
 
-                # Update full data from edited page (only current page)
+                # Save edits back correctly (no duplication)
                 if not edited_page.empty:
-                    current_trips.iloc[start_idx:end_idx] = edited_page
+                    # Align indices to avoid pandas assertion error
+                    edited_page.index = current_trips.index[start_idx:end_idx]
+                    # Use loc to assign
+                    current_trips.loc[current_trips.index[start_idx:end_idx]] = edited_page.values
                     st.session_state[session_key] = current_trips
 
                 st.caption(f"Showing rows {start_idx+1}–{min(end_idx, total_rows)} of {total_rows}")
@@ -346,6 +337,7 @@ with tab_fleet:
                     colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}")
                     colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}")
 
+                # Add Fuel Slip
                 with st.expander("➕ Add Fuel Slip", expanded=False):
                     with st.form(key=f"add_fuel_form_{vid}"):
                         col_date, col_odo = st.columns(2)
@@ -381,8 +373,9 @@ with tab_fleet:
                             st.success("Fuel slip added!")
                             st.rerun()
 
+                # Add Toll Slip
                 with st.expander("➕ Add Toll Slip", expanded=False):
-                    st.caption("For multiple tolls on the same day → submit the form multiple times with different times.")
+                    st.caption("For multiple tolls on the same day → submit multiple times with different times.")
                     
                     with st.form(key=f"add_toll_form_{vid}"):
                         col_date, col_time = st.columns(2)
@@ -437,7 +430,6 @@ with tab_fleet:
                     monthly_trips = df_report[df_report['Month'] == selected_month].copy()
                     monthly_trips = monthly_trips.drop(columns=['Month'])
 
-                    # Summary aggregates
                     monthly_summary = monthly_trips.agg({
                         'Distance (km)': 'sum',
                         'Fuel Cost (R)': 'sum',
@@ -448,7 +440,6 @@ with tab_fleet:
                     st.markdown("#### Monthly Summary")
                     st.dataframe(monthly_summary, use_container_width=True)
 
-                    # All trips for the month
                     st.markdown("#### All Trips & Slips in Selected Month")
                     st.dataframe(
                         monthly_trips,
@@ -457,7 +448,6 @@ with tab_fleet:
                         hide_index=False
                     )
 
-                    # Bar chart
                     fig_month = px.bar(monthly_summary.T.reset_index(),
                                        x='index', y='Total',
                                        title=f"Summary for {selected_month_str}",
