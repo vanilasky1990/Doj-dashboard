@@ -69,8 +69,8 @@ def estimate_next_service(status: Dict):
 # ────────────────────────────────────────────────
 st.markdown('<div class="header">', unsafe_allow_html=True)
 st.image(
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Coat_of_arms_of_South_Africa.svg/200px-Coat_of_arms_of_South_Africa.svg.png",
-    width=160
+    "https://www.gov.za/sites/default/files/styles/medium/public/coat_of_arms.png",
+    width=140
 )
 st.markdown(f"""
     <h1>MC Tsakane Dashboard</h1>
