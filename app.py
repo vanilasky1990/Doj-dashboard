@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # ────────────────────────────────────────────────
-# Styling - solid orange header
+# Styling
 # ────────────────────────────────────────────────
 st.markdown("""
     <style>
@@ -49,7 +49,7 @@ def get_vehicle_status(vehicle_id: int) -> Dict:
     return data.get(vehicle_id, {"location": "Unknown", "fuel": 0, "odo": 0, "last_service": "N/A", "alerts": "N/A"})
 
 # ────────────────────────────────────────────────
-# Header - solid orange
+# Header
 # ────────────────────────────────────────────────
 st.markdown('<div class="header">', unsafe_allow_html=True)
 st.image(
@@ -121,11 +121,11 @@ with tab_sundry:
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
 
 # ────────────────────────────────────────────────
-# FLEET SERVICES tab – with refuelling and tolls
+# FLEET SERVICES tab – with slip adding forms
 # ────────────────────────────────────────────────
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
-    st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips (including refuelling and tolls).")
+    st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips/logs.")
 
     vehicles = [
         {"id": 1, "reg": "JM 45 CY GP", "short": "Vehicle 1"},
@@ -141,41 +141,11 @@ with tab_fleet:
         reg = veh["reg"]
         status = get_vehicle_status(vid)
 
-        with tab:
-            st.markdown(f"### {reg}")
-
-            # Status overview
-            c1, c2, c3 = st.columns([2, 2, 1.4])
-
-            c1.markdown(f"**Current location**  \n{status['location']}")
-
-            fuel_color = "green" if status["fuel"] > 50 else "orange" if status["fuel"] > 20 else "red"
-            with c2:
-                c2.markdown(f"**Fuel level**  \n<span style='color:{fuel_color}'>{status['fuel']}%</span>", unsafe_allow_html=True)
-                c2.progress(status["fuel"] / 100)
-                c2.markdown(f"**Odometer**  \n{status['odo']:,} km")
-
-            alert_cls = "status-good" if "None" in status["alerts"] else "status-warning" if "Low" in status["alerts"] else "status-alert"
-            c3.markdown(f"**Last service**  \n{status['last_service']}")
-            c3.markdown(f"**Alerts**  \n<span class='{alert_cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
-
-            # Mileage chart
-            dates = [datetime.now().date() - timedelta(days=x) for x in range(13, -1, -1)]
-            km_list = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]
-            df_mileage = pd.DataFrame({"Date": dates, "Daily km": km_list})
-            fig = px.line(df_mileage, x="Date", y="Daily km", title="Last 14 days mileage trend")
-            fig.update_traces(line_color="#005c28")
-            fig.update_layout(margin=dict(l=20, r=20, t=40, b=20), height=300)
-
-            st.plotly_chart(fig, use_container_width=True, key=f"mileage_chart_vehicle_{vid}")
-
-            # ────────────────────────────────────────────────
-            # Recent trips / logs – including refuelling and tolls
-            # ────────────────────────────────────────────────
-            st.subheader(f"Recent trips / logs – {reg}")
-
-            trips_data = pd.DataFrame({
-                "Date": ["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"],
+        # Initialize session state for this vehicle's trip log if not exists
+        session_key = f"trips_vehicle_{vid}"
+        if session_key not in st.session_state:
+            st.session_state[session_key] = pd.DataFrame({
+                "Date": pd.to_datetime(["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"]),
                 "Driver": ["J. Smith", "A. Nkosi", "M. Botha", "S. Naidoo"],
                 "Purpose": ["Court appearance", "Site inspection", "Maintenance", "Vehicle transfer"],
                 "Start Odo": [124600, 124500, 124200, 123900],
@@ -188,57 +158,53 @@ with tab_fleet:
                 "Toll Plaza / Notes": ["N3 Mariannhill", "", "N1 Huguenot", ""]
             })
 
-            # FIX: Convert Date strings → datetime objects
-            trips_data["Date"] = pd.to_datetime(trips_data["Date"], format="%Y-%m-%d", errors="coerce")
+        current_trips = st.session_state[session_key]
+
+        with tab:
+            st.markdown(f"### {reg}")
+
+            # Status overview
+            c1, c2, c3 = st.columns([2, 2, 1.4])
+            c1.markdown(f"**Current location**  \n{status['location']}")
+            fuel_color = "green" if status["fuel"] > 50 else "orange" if status["fuel"] > 20 else "red"
+            with c2:
+                c2.markdown(f"**Fuel level**  \n<span style='color:{fuel_color}'>{status['fuel']}%</span>", unsafe_allow_html=True)
+                c2.progress(status["fuel"] / 100)
+                c2.markdown(f"**Odometer**  \n{status['odo']:,} km")
+            alert_cls = "status-good" if "None" in status["alerts"] else "status-warning" if "Low" in status["alerts"] else "status-alert"
+            c3.markdown(f"**Last service**  \n{status['last_service']}")
+            c3.markdown(f"**Alerts**  \n<span class='{alert_cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
+
+            # Mileage chart
+            dates = [datetime.now().date() - timedelta(days=x) for x in range(13, -1, -1)]
+            km_list = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]
+            df_mileage = pd.DataFrame({"Date": dates, "Daily km": km_list})
+            fig = px.line(df_mileage, x="Date", y="Daily km", title="Last 14 days mileage trend")
+            fig.update_traces(line_color="#005c28")
+            fig.update_layout(margin=dict(l=20, r=20, t=40, b=20), height=300)
+            st.plotly_chart(fig, use_container_width=True, key=f"mileage_chart_vehicle_{vid}")
+
+            # ────────────────────────────────────────────────
+            # Trips / Logs Table
+            # ────────────────────────────────────────────────
+            st.subheader(f"Recent trips / logs – {reg}")
 
             column_config = {
-                "Date": st.column_config.DateColumn(
-                    "Date",
-                    format="YYYY-MM-DD",
-                    required=True,
-                    help="Trip date (date picker available)"
-                ),
+                "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD", required=True),
                 "Driver": st.column_config.TextColumn("Driver", required=True),
                 "Purpose": st.column_config.TextColumn("Purpose"),
                 "Start Odo": st.column_config.NumberColumn("Start Odo", min_value=0, format="%d km"),
                 "End Odo": st.column_config.NumberColumn("End Odo", min_value=0, format="%d km"),
                 "Distance (km)": st.column_config.NumberColumn("Distance (km)", min_value=0, format="%d km"),
-                
-                # Refuelling columns
-                "Fuel Added (L)": st.column_config.NumberColumn(
-                    "Fuel Added (L)",
-                    min_value=0.0,
-                    format="%.1f L",
-                    help="Litres added during or after this trip (0 = no refuelling)"
-                ),
-                "Fuel Cost (R)": st.column_config.NumberColumn(
-                    "Fuel Cost (R)",
-                    min_value=0.0,
-                    format="R %.2f",
-                    help="Total cost for fuel added"
-                ),
-                "Odo at Refuel": st.column_config.NumberColumn(
-                    "Odo at Refuel",
-                    min_value=0,
-                    format="%d km",
-                    help="Odometer reading when fuel was added (0 = no refuelling)"
-                ),
-                
-                # Tolls columns
-                "Toll Amount (R)": st.column_config.NumberColumn(
-                    "Toll Amount (R)",
-                    min_value=0.0,
-                    format="R %.2f",
-                    help="Toll fees paid during this trip"
-                ),
-                "Toll Plaza / Notes": st.column_config.TextColumn(
-                    "Toll Plaza / Notes",
-                    help="e.g. N3 Mariannhill, e-toll invoice number, etc."
-                )
+                "Fuel Added (L)": st.column_config.NumberColumn("Fuel Added (L)", min_value=0.0, format="%.1f L"),
+                "Fuel Cost (R)": st.column_config.NumberColumn("Fuel Cost (R)", min_value=0.0, format="R %.2f"),
+                "Odo at Refuel": st.column_config.NumberColumn("Odo at Refuel", min_value=0, format="%d km"),
+                "Toll Amount (R)": st.column_config.NumberColumn("Toll Amount (R)", min_value=0.0, format="R %.2f"),
+                "Toll Plaza / Notes": st.column_config.TextColumn("Toll Plaza / Notes")
             }
 
             edited_trips = st.data_editor(
-                trips_data,
+                current_trips,
                 column_config=column_config,
                 num_rows="dynamic",
                 use_container_width=True,
@@ -246,7 +212,10 @@ with tab_fleet:
                 key=f"trips_log_vehicle_{vid}"
             )
 
-            # Summary metrics
+            # Update session state after editing
+            st.session_state[session_key] = edited_trips
+
+            # Summary
             if not edited_trips.empty:
                 total_distance = edited_trips["Distance (km)"].sum()
                 total_fuel_cost = edited_trips["Fuel Cost (R)"].sum()
@@ -256,6 +225,81 @@ with tab_fleet:
                 colA.metric("Total Distance", f"{total_distance:,} km")
                 colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}")
                 colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}")
+
+            # ────────────────────────────────────────────────
+            # Add Fuel Slip
+            # ────────────────────────────────────────────────
+            with st.expander("➕ Add Fuel Slip", expanded=False):
+                with st.form(key=f"add_fuel_form_{vid}"):
+                    col_date, col_odo = st.columns(2)
+                    fuel_date = col_date.date_input("Refuelling date", value=datetime.now().date())
+                    fuel_odo = col_odo.number_input("Odometer at refuel (km)", min_value=0, value=status["odo"], step=1)
+
+                    col_litres, col_cost = st.columns(2)
+                    fuel_litres = col_litres.number_input("Litres added", min_value=0.0, step=0.1, format="%.1f")
+                    fuel_cost = col_cost.number_input("Total fuel cost (R)", min_value=0.0, step=1.0, format="%.2f")
+
+                    fuel_notes = st.text_input("Fuel station / Notes", "")
+
+                    submitted_fuel = st.form_submit_button("Add Fuel Slip", type="primary")
+
+                    if submitted_fuel:
+                        new_row = pd.DataFrame([{
+                            "Date": pd.to_datetime(fuel_date),
+                            "Driver": "—",
+                            "Purpose": "Refuelling",
+                            "Start Odo": fuel_odo,
+                            "End Odo": fuel_odo,
+                            "Distance (km)": 0,
+                            "Fuel Added (L)": fuel_litres,
+                            "Fuel Cost (R)": fuel_cost,
+                            "Odo at Refuel": fuel_odo,
+                            "Toll Amount (R)": 0.00,
+                            "Toll Plaza / Notes": fuel_notes
+                        }])
+
+                        st.session_state[session_key] = pd.concat(
+                            [st.session_state[session_key], new_row],
+                            ignore_index=True
+                        )
+                        st.success("Fuel slip added successfully!")
+                        st.rerun()
+
+            # ────────────────────────────────────────────────
+            # Add Toll Slip
+            # ────────────────────────────────────────────────
+            with st.expander("➕ Add Toll Slip", expanded=False):
+                with st.form(key=f"add_toll_form_{vid}"):
+                    col_date, col_amount = st.columns(2)
+                    toll_date = col_date.date_input("Toll payment date", value=datetime.now().date())
+                    toll_amount = col_amount.number_input("Toll amount (R)", min_value=0.0, step=1.0, format="%.2f")
+
+                    toll_plaza = st.text_input("Toll plaza / Route", "")
+                    toll_notes = st.text_input("Additional notes / Invoice", "")
+
+                    submitted_toll = st.form_submit_button("Add Toll Slip", type="primary")
+
+                    if submitted_toll:
+                        new_row = pd.DataFrame([{
+                            "Date": pd.to_datetime(toll_date),
+                            "Driver": "—",
+                            "Purpose": "Toll payment",
+                            "Start Odo": status["odo"],
+                            "End Odo": status["odo"],
+                            "Distance (km)": 0,
+                            "Fuel Added (L)": 0.0,
+                            "Fuel Cost (R)": 0.0,
+                            "Odo at Refuel": 0,
+                            "Toll Amount (R)": toll_amount,
+                            "Toll Plaza / Notes": f"{toll_plaza} – {toll_notes}".strip(" – ")
+                        }])
+
+                        st.session_state[session_key] = pd.concat(
+                            [st.session_state[session_key], new_row],
+                            ignore_index=True
+                        )
+                        st.success("Toll slip added successfully!")
+                        st.rerun()
 
 # ────────────────────────────────────────────────
 # Footer
