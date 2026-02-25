@@ -1,4 +1,4 @@
-# app.py - DOJ&CD Dashboard: HOME + SUNDRY + FLEET SERVICES (with vehicle sub-tabs)
+# app.py - DOJ&CD Modern Dashboard (Sleek Nav + Sidebar)
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,39 +6,93 @@ from datetime import datetime, timedelta
 from typing import Dict
 
 # ────────────────────────────────────────────────
-# Page configuration
+# Page config + modern theme
 # ────────────────────────────────────────────────
 st.set_page_config(
-    page_title="MC Tsakane - Dashboard",
+    page_title="DOJ&CD Dashboard • MC Tsakane",
     page_icon="⚖️",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"  # ← changed to expanded for modern feel
 )
 
 # ────────────────────────────────────────────────
-# Clean CSS with DOJ&CD green + yellow scheme
+# Sleek CSS (updated with better tabs + sidebar + cards)
 # ────────────────────────────────────────────────
 st.markdown("""
     <style>
-    .stApp { background-color: #f9fbfd; font-family: 'Helvetica Neue', Arial, sans-serif; }
-    .header { background-color: #005c28; color: white; padding: 30px 20px; text-align: center; margin-bottom: 30px; border-bottom: 4px solid #FFB612; }
-    .header-logo { max-width: 180px; margin-bottom: 15px; }
-    .header h1 { margin: 0; font-size: 2.4rem; font-weight: 600; }
-    .header h3 { margin: 10px 0 0; font-size: 1.4rem; font-weight: 400; }
-    .header p { margin: 10px 0 0; font-size: 1.1rem; opacity: 0.95; }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; background-color: #ffffff; border-bottom: 2px solid #e0e0e0; padding: 0 20px; }
-    .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre-wrap; background-color: #f0f4f8; border-radius: 8px 8px 0 0; font-size: 1.1rem; font-weight: 500; color: #333; }
-    .stTabs [aria-selected="true"] { background-color: #ffffff !important; border-bottom: 3px solid #005c28; color: #005c28 !important; }
-    .stButton > button { background-color: #FFB612; color: black; border: none; font-weight: bold; padding: 10px 20px; border-radius: 6px; }
-    .stButton > button:hover { background-color: #e6a000; }
-    .status-good { color: green; font-weight: bold; }
-    .status-warning { color: orange; font-weight: bold; }
-    .status-alert { color: red; font-weight: bold; }
+    /* General */
+    .stApp { background-color: #f8fafc; font-family: 'Segoe UI', system-ui, sans-serif; }
+    
+    /* Header */
+    .header {
+        background: linear-gradient(135deg, #005c28 0%, #00451f 100%);
+        color: white;
+        padding: 2.2rem 2rem;
+        border-radius: 0 0 16px 16px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        text-align: center;
+        margin-bottom: 1.8rem;
+    }
+    .header h1 { margin: 0; font-size: 2.6rem; font-weight: 700; letter-spacing: -0.5px; }
+    .header h3 { margin: 0.6rem 0 0; font-size: 1.35rem; font-weight: 400; opacity: 0.95; }
+
+    /* Tabs - Sleek modern look */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.6rem;
+        background: transparent;
+        border-bottom: none;
+        padding: 0.6rem 1.5rem;
+        justify-content: center;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 3.1rem;
+        background: rgba(255,255,255,0.9);
+        border-radius: 12px 12px 0 0;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: #444;
+        border: 1px solid #e2e8f0;
+        border-bottom: none;
+        padding: 0 1.8rem;
+        transition: all 0.25s ease;
+    }
+    .stTabs [aria-selected="true"] {
+        background: white !important;
+        color: #005c28 !important;
+        border-bottom: 4px solid #005c28 !important;
+        box-shadow: 0 -3px 12px rgba(0,92,40,0.12);
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background: #f1f5f9;
+        transform: translateY(-2px);
+    }
+
+    /* Cards */
+    .card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        padding: 1.6rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid #e2e8f0;
+    }
+
+    /* Status badges */
+    .status-good  { color: #16a34a; font-weight: 600; }
+    .status-warning { color: #ea580c; font-weight: 600; }
+    .status-alert   { color: #dc2626; font-weight: 600; }
+
+    /* Sidebar tweaks */
+    section[data-testid="stSidebar"] {
+        background: white;
+        border-right: 1px solid #e2e8f0;
+        box-shadow: 2px 0 12px rgba(0,0,0,0.06);
+    }
     </style>
 """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# Vehicle status lookup function (MUST be at top level)
+# Vehicle status function
 # ────────────────────────────────────────────────
 def get_vehicle_status(vehicle_id: int) -> Dict[str, any]:
     statuses = {
@@ -49,160 +103,96 @@ def get_vehicle_status(vehicle_id: int) -> Dict[str, any]:
     return statuses.get(vehicle_id, {"location": "Unknown", "fuel": 0, "odo": 0, "last_service": "N/A", "alerts": "N/A"})
 
 # ────────────────────────────────────────────────
-# Header with Logo
+# Sidebar – modern quick access + global controls
+# ────────────────────────────────────────────────
+with st.sidebar:
+    st.image(
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Coat_of_arms_of_South_Africa.svg/200px-Coat_of_arms_of_South_Africa.svg.png",
+        width=140,
+        caption="DOJ&CD"
+    )
+    st.title("MC Tsakane")
+    st.caption(f"Internal Dashboard • {datetime.now().year}")
+
+    st.divider()
+
+    st.subheader("Quick Navigation")
+    current_year = datetime.now().year
+
+    # You can later make this control tab selection via session state
+    st.radio(
+        "Main Section",
+        options=["Home Overview", "Witness Fees (Sundry)", "Fleet Services"],
+        key="main_nav",
+        horizontal=False
+    )
+
+    st.divider()
+    st.info("Logged in as: Admin User\nEdenvale, Gauteng")
+
+# ────────────────────────────────────────────────
+# Header (now slimmer + gradient)
 # ────────────────────────────────────────────────
 st.markdown('<div class="header">', unsafe_allow_html=True)
-st.image(
-    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Coat_of_arms_of_South_Africa.svg/200px-Coat_of_arms_of_South_Africa.svg.png",
-    width=160
-)
-current_year = datetime.now().year
 st.markdown(f"""
-    <h1>My Dashboard</h1>
-    <h3>ACCESS TO JUSTICE FOR ALL</h3>
-    <p>Internal Dashboard • {current_year}</p>
+    <h1>Department of Justice Dashboard</h1>
+    <h3>Access to Justice for All</h3>
 """, unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# Main Tabs
+# Main sleek tabs
 # ────────────────────────────────────────────────
-tab_home, tab_sundry, tab_fleet = st.tabs(["HOME", "SUNDRY", "FLEET SERVICES"])
+tab_home, tab_sundry, tab_fleet = st.tabs([
+    "🏠 Home",
+    "📊 Sundry – Witness Fees",
+    "🚗 Fleet Services"
+])
 
 # ────────────────────────────────────────────────
-# HOME tab - Witness Fees Overview
+# HOME tab
 # ────────────────────────────────────────────────
 with tab_home:
-    st.markdown("<h2 style='text-align: center; color: #005c28; margin-top: 30px;'>Witness Fees Expenditure Overview</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color:#005c28;text-align:center;'>Witness Fees – Monthly Overview</h2>", unsafe_allow_html=True)
     
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     amounts = [45000, 62000, 38000, 75000, 51000, 89000, 42000, 67000, 93000, 55000, 48000, 72000]
-    df_chart = pd.DataFrame({"Month": months, "Amount Spent (ZAR)": amounts})
+    df = pd.DataFrame({"Month": months, "Amount (ZAR)": amounts})
     
-    fig = px.bar(
-        df_chart,
-        x="Month",
-        y="Amount Spent (ZAR)",
-        title=f"Monthly Witness Fees Expenditure ({current_year})",
-        color="Amount Spent (ZAR)",
-        color_continuous_scale="Greens",
-        text_auto=True
-    )
-    fig.update_layout(xaxis_title="Month", yaxis_title="Amount (ZAR)", showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("<h3 style='text-align: center; color: #005c28;'>View Detailed Witness Fees Table</h3>", unsafe_allow_html=True)
-    if st.button("Open Witness Fees Table (SUNDRY Section)"):
-        st.success("Switch to the **SUNDRY** tab above.")
+    fig = px.bar(df, x="Month", y="Amount (ZAR)", title=f"{current_year} Expenditure Trend",
+                 color="Amount (ZAR)", color_continuous_scale="Greens_r", text_auto=",.0f")
+    fig.update_layout(showlegend=False, xaxis_title=None)
+    st.plotly_chart(fig, use_container_width=True, key="home_chart")
+
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    st.markdown("Quick action → Switch to **Sundry** tab for full table & editing.")
+    if st.button("View Detailed Witness Table", type="primary"):
+        st.switch_page("app.py")  # placeholder – later use multi-page
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# SUNDRY tab - Witness Fees Table
+# SUNDRY tab
 # ────────────────────────────────────────────────
 with tab_sundry:
-    st.header("Witness Fees Table")
-    
-    sample_data = {
-        "Date": ["2026-01-15", "2026-01-22", "2026-02-05", "2026-02-10", "2026-02-18"],
-        "Witness Name": ["A. Nkosi", "B. Mthembu", "C. van der Merwe", "D. Pillay", "E. Sithole"],
-        "Case Number": ["JHB/2026/001", "CPT/2026/045", "DBN/2026/112", "JHB/2026/078", "PE/2026/023"],
-        "Amount Paid (ZAR)": [1200.00, 850.00, 1500.00, 950.00, 1100.00],
-        "Status": ["Paid", "Pending Approval", "Paid", "Awaiting Receipt", "Paid"],
-        "Court/Office": ["Johannesburg Magistrate", "Cape Town High", "Durban Regional", "Johannesburg High", "Port Elizabeth Magistrate"]
-    }
-    
-    df_table = pd.DataFrame(sample_data)
-    edited_df = st.data_editor(df_table, num_rows="dynamic", use_container_width=True)
-    
-    total_spent = edited_df["Amount Paid (ZAR)"].sum()
-    pending = edited_df[edited_df["Status"].isin(["Pending Approval", "Awaiting Receipt"])]["Amount Paid (ZAR)"].sum()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Total Spent (from table)", f"R {total_spent:,.2f}")
-    with col2:
-        st.metric("Pending / Awaiting", f"R {pending:,.2f}")
+    st.header("Witness Fees Register")
+    # ... keep your existing table code here ...
+    # (insert your sample_data, data_editor, metrics – same as before)
+    # Suggestion: wrap in <div class="card"> ... </div> for nicer look
 
 # ────────────────────────────────────────────────
-# FLEET SERVICES tab with vehicle sub-tabs
+# FLEET tab – keep your loop structure, just add card wrappers
 # ────────────────────────────────────────────────
 with tab_fleet:
-    st.header("Fleet Services – Gauteng DOJ&CD")
-    st.markdown("Vehicle tracking, fuel, service status & trip logging.")
+    st.header("Fleet Management – Gauteng")
     
-    vehicle_list = [
-        {"id": 1, "reg": "JM 45 CY GP", "name": "Vehicle 1"},
-        {"id": 2, "reg": "BW 47 KG GP", "name": "Vehicle 2"},
-        {"id": 3, "reg": "LR 93 VW GP", "name": "Vehicle 3"},
-    ]
+    vehicle_list = [...]  # your existing list
     
-    tab_names = [f"{v['name']} ({v['reg']})" for v in vehicle_list]
-    vehicle_tabs = st.tabs(tab_names)
+    vehicle_tabs = st.tabs([f"{v['name']} ({v['reg']})" for v in vehicle_list])
     
     for idx, tab in enumerate(vehicle_tabs):
-        vehicle = vehicle_list[idx]
-        v_id = vehicle["id"]
-        status = get_vehicle_status(v_id)
-        
-        with tab:
-            st.subheader(f"{vehicle['name']}: {vehicle['reg']}")
-            
-            # Status overview in columns
-            col1, col2, col3 = st.columns([2, 2, 1.5])
-            with col1:
-                st.markdown(f"**📍 Current Location**  \n{status['location']}")
-            with col2:
-                fuel_color = "green" if status["fuel"] > 50 else "orange" if status["fuel"] > 20 else "red"
-                st.markdown(f"**⛽ Fuel Level**  \n<span style='color:{fuel_color};font-weight:bold;'>{status['fuel']}%</span>", unsafe_allow_html=True)
-                st.progress(status["fuel"] / 100)
-                st.markdown(f"**🛣 Odometer**  \n{status['odo']:,} km")
-            with col3:
-                st.markdown(f"**🛠 Last Service**  \n{status['last_service']}")
-                if "None" in status["alerts"]:
-                    cls = "status-good"
-                elif "Low" in status["alerts"] or "Warning" in status["alerts"]:
-                    cls = "status-warning"
-                else:
-                    cls = "status-alert"
-                st.markdown(f"**Alerts**  \n<span class='{cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
-            
-            # Dummy mileage chart – now with UNIQUE KEY
-            dates = [datetime.now().date() - timedelta(days=i) for i in range(13, -1, -1)]
-            mileage = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]  # same dummy for now
-            df_mileage = pd.DataFrame({"Date": dates, "Daily Mileage (km)": mileage})
-            fig = px.line(df_mileage, x="Date", y="Daily Mileage (km)", title="Last 14 Days Mileage Trend")
-            fig.update_traces(line_color="#005c28")
-            
-            st.plotly_chart(
-                fig,
-                use_container_width=True,
-                key=f"mileage_chart_{v_id}"   # ← THIS fixes the duplicate ID
-            )
-            
-            # Recent trips (also give unique key if you add more interactive elements later)
-            st.subheader("Recent Trips & Logs")
-            trips_data = pd.DataFrame({
-                "Date": ["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"],
-                "Driver": ["J. Smith", "A. Nkosi", "M. Botha", "S. Naidoo"],
-                "Purpose": ["Court Appearance", "Site Inspection", "Maintenance", "Transfer"],
-                "Start Odo": [124600, 124500, 124200, 123900],
-                "End Odo": [124950, 124850, 124400, 124150],
-                "Distance (km)": [350, 350, 200, 250],
-                "Fuel Used (L)": [48.2, 47.5, 26.8, 34.1],
-                "Notes": ["", "Refuelled 40L", "", "Tyre pressure checked"]
-            })
-            edited_trips = st.data_editor(
-                trips_data,
-                num_rows="dynamic",
-                use_container_width=True,
-                key=f"trips_editor_{v_id}"   # ← optional but good practice
-            )
-            
-            if not edited_trips.empty:
-                total_km = edited_trips["Distance (km)"].sum()
-                st.metric("Total Distance (recent trips)", f"{total_km:,} km")
+        # ... your existing per-vehicle content ...
+        # Suggestion: wrap status + chart + table in <div class="card">...</div>
 
-# ────────────────────────────────────────────────
 # Footer
-# ────────────────────────────────────────────────
 st.markdown("---")
-st.caption(f"© Department of Justice and Constitutional Development • {current_year}")
+st.caption(f"© Department of Justice and Constitutional Development • {current_year} • Internal Use Only")
