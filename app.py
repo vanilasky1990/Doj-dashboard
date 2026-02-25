@@ -3,8 +3,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta, time
 from typing import Dict
-import io  # for CSV
-# No extra import needed for Excel — pandas handles it
+import io
 
 # ────────────────────────────────────────────────
 # Page configuration
@@ -186,7 +185,7 @@ with tab_sundry:
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
 
 # ================================================
-# FLEET SERVICES tab – with CSV & Excel export in Monthly Report
+# FLEET SERVICES tab – full version with CSV & Excel export
 # ================================================
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
@@ -389,7 +388,7 @@ with tab_fleet:
                     selected_month_str = st.selectbox(
                         "Select month to view",
                         options=available_months,
-                        index=0  # latest month first
+                        index=0
                     )
 
                     selected_month = pd.Period(selected_month_str)
