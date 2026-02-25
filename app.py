@@ -83,73 +83,72 @@ with tab_sundry:
 
 # FLEET SERVICES tab with 3 vehicle sub-tabs
 with tab_fleet:
-    st.header("Fleet Services")
-    st.markdown("Vehicle tracking and status overview for DOJ&CD fleet in Gauteng.")
+    st.header("Fleet Services – Gauteng DOJ&CD")
+    st.markdown("Real-time vehicle tracking, fuel, service status & trip logging.")
 
-    # Sub-tabs for each vehicle
-    v1, v2, v3 = st.tabs([
-        "Vehicle 1 (JM 45 CY GP)",
-        "Vehicle 2 (BW 47 KG GP)",
-        "Vehicle 3 (LR 93 VW GP)"
-    ])
+    vehicle_list = [
+        {"id": 1, "reg": "JM 45 CY GP", "name": "Vehicle 1"},
+        {"id": 2, "reg": "BW 47 KG GP", "name": "Vehicle 2"},
+        {"id": 3, "reg": "LR 93 VW GP", "name": "Vehicle 3"},
+    ]
 
-    # Dummy data function for consistency
-    def get_vehicle_status(vehicle_id):
-        statuses = {
-            1: {"location": "JHB Magistrate Court", "fuel": 65, "odo": 124850, "last_service": "2025-11-15", "alerts": "None"},
-            2: {"location": "En Route to CPT", "fuel": 28, "odo": 98740, "last_service": "2025-10-20", "alerts": "Low Fuel Warning"},
-            3: {"location": "Parked - PE Office", "fuel": 92, "odo": 156320, "last_service": "2026-01-10", "alerts": "Service Due Soon"}
-        }
-        return statuses.get(vehicle_id, {"location": "Unknown", "fuel": 0, "odo": 0, "last_service": "N/A", "alerts": "N/A"})
+    # Create sub-tabs dynamically
+    tab_names = [f"{v['name']} ({v['reg']})" for v in vehicle_list]
+    vehicle_tabs = st.tabs(tab_names)
 
-    # Vehicle 1
-    with v1:
-        status = get_vehicle_status(1)
-        st.subheader("Vehicle 1: JM 45 CY GP")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"**Current Location:** {status['location']}")
-            st.markdown(f"**Fuel Level:** {status['fuel']}%")
-            st.markdown(f"**Odometer:** {status['odo']:,} km")
-        with col2:
-            st.markdown(f"**Last Service:** {status['last_service']}")
-            alert_class = "status-good" if "None" in status['alerts'] else "status-warning" if "Low" in status['alerts'] else "status-alert"
-            st.markdown(f"**Alerts:** <span class='{alert_class}'>{status['alerts']}</span>", unsafe_allow_html=True)
+    for idx, tab in enumerate(vehicle_tabs):
+        vehicle = vehicle_list[idx]
+        v_id = vehicle["id"]
+        status = get_vehicle_status(v_id)
 
-        # Dummy daily mileage chart
-        dates = [datetime.now().date() - timedelta(days=i) for i in range(6, -1, -1)]
-        mileage = [45, 120, 0, 85, 60, 30, 95]
-        df_mileage = pd.DataFrame({"Date": dates, "Daily Mileage (km)": mileage})
-        fig = px.line(df_mileage, x="Date", y="Daily Mileage (km)", title="Last 7 Days Mileage")
-        st.plotly_chart(fig, use_container_width=True)
+        with tab:
+            st.subheader(f"{vehicle['name']}: {vehicle['reg']}")
 
-        # Recent trips table (editable)
-        st.subheader("Recent Trips / Logs")
-        trips_data = pd.DataFrame({
-            "Date": ["2026-02-15", "2026-02-10", "2026-02-05"],
-            "Driver": ["J. Smith", "A. Nkosi", "M. Botha"],
-            "Purpose": ["Court Transfer", "Site Visit", "Maintenance"],
-            "Start Odo": [124500, 124200, 123900],
-            "End Odo": [124850, 124400, 124150],
-            "Distance (km)": [350, 200, 250],
-            "Notes": ["", "Fuel added", ""]
-        })
-        st.data_editor(trips_data, num_rows="dynamic", use_container_width=True)
+            # Status cards in columns
+            col1, col2, col3 = st.columns([2, 2, 1.2])
+            with col1:
+                st.markdown(f"**📍 Current Location**  \n{status['location']}")
+            with col2:
+                fuel_color = "green" if status['fuel'] > 50 else "orange" if status['fuel'] > 20 else "red"
+                st.markdown(f"**⛽ Fuel Level**  \n<span style='color:{fuel_color};font-weight:bold;'>{status['fuel']}%</span>", unsafe_allow_html=True)
+                st.markdown(f"**🛣 Odometer**  \n{status['odo']:,} km")
+            with col3:
+                st.markdown(f"**🛠 Last Service**  \n{status['last_service']}")
+                if "None" in status['alerts']:
+                    cls = "status-good"
+                elif "Low" in status['alerts']:
+                    cls = "status-warning"
+                else:
+                    cls = "status-alert"
+                st.markdown(f"**Alerts**  \n<span class='{cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
 
-    # Vehicle 2 (similar structure)
-    with v2:
-        status = get_vehicle_status(2)
-        st.subheader("Vehicle 2: BW 47 KG GP")
-        # ... (repeat similar columns, chart, table with different dummy data)
-        st.info("Vehicle 2 details (similar layout) - customize as needed.")
+            # Mileage chart (you can later parameterize per vehicle)
+            dates = [datetime.now().date() - timedelta(days=i) for i in range(13, -1, -1)]   # last 14 days example
+            mileage = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]              # dummy – replace with real data
+            df_mileage = pd.DataFrame({"Date": dates, "Daily Mileage (km)": mileage[-len(dates):]})
+            fig = px.line(df_mileage, x="Date", y="Daily Mileage (km)", title="Last 14 Days Mileage Trend")
+            fig.update_traces(line_color='#005c28')
+            st.plotly_chart(fig, use_container_width=True)
 
-    # Vehicle 3
-    with v3:
-        status = get_vehicle_status(3)
-        st.subheader("Vehicle 3: LR 93 VW GP")
-        # ... (repeat layout)
-        st.info("Vehicle 3 details (similar layout) - customize as needed.")
+            # Recent trips (per vehicle – in real app load from DB/CSV)
+            st.subheader("Recent Trips & Logs")
+            # Example – customize per vehicle later
+            trips_data = pd.DataFrame({
+                "Date": ["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"],
+                "Driver": ["J. Smith", "A. Nkosi", "M. Botha", "S. Naidoo"],
+                "Purpose": ["Court Appearance", "Site Inspection", "Maintenance", "Transfer"],
+                "Start Odo": [124600, 124500, 124200, 123900],
+                "End Odo": [124950, 124850, 124400, 124150],
+                "Distance (km)": [350, 350, 200, 250],
+                "Fuel Used (L)": [48.2, 47.5, 26.8, 34.1],
+                "Notes": ["", "Refuelled 40L", "", "Tyre pressure checked"]
+            })
+            edited_trips = st.data_editor(trips_data, num_rows="dynamic", use_container_width=True)
 
+            # Quick stats from edited table
+            if not edited_trips.empty:
+                total_km = edited_trips["Distance (km)"].sum()
+                st.metric("Total Distance (recent trips)", f"{total_km:,} km")
 # Footer
 st.markdown("---")
 st.caption("© Department of Justice and Constitutional Development • 2026")
