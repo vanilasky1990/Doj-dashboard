@@ -185,7 +185,7 @@ with tab_sundry:
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
 
 # ================================================
-# FLEET SERVICES TAB – full version with all features
+# FLEET SERVICES TAB – with pagination (20 rows/page)
 # ================================================
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
@@ -288,7 +288,9 @@ with tab_fleet:
                     num_rows="dynamic",
                     use_container_width=True,
                     hide_index=True,
-                    key=f"trips_log_vehicle_{vid}"
+                    key=f"trips_log_vehicle_{vid}",
+                    pagination=True,                  # ← enables pagination
+                    pagination_page_size=20           # ← 20 rows per page
                 )
 
                 st.session_state[session_key] = edited_trips
@@ -427,9 +429,7 @@ with tab_fleet:
                         key=f"monthly_report_chart_vehicle_{vid}_{selected_month_str}"
                     )
 
-                    # ────────────────────────────────────────────────
-                    # CSV Export – full monthly trips
-                    # ────────────────────────────────────────────────
+                    # CSV Export
                     csv_buffer = io.StringIO()
                     monthly_trips.to_csv(csv_buffer, index=False)
                     csv_data = csv_buffer.getvalue()
@@ -444,9 +444,7 @@ with tab_fleet:
                         key=f"download_csv_{vid}_{selected_month_str}"
                     )
 
-                    # ────────────────────────────────────────────────
-                    # Excel Export – trips + summary sheets
-                    # ────────────────────────────────────────────────
+                    # Excel Export
                     excel_buffer = io.BytesIO()
                     with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
                         monthly_trips.to_excel(writer, sheet_name='Trips & Slips', index=False)
