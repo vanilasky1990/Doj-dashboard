@@ -120,9 +120,12 @@ with tab_sundry:
     col1.metric("Total Spent", f"R {total_spent:,.2f}")
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
 
+# ────────────────────────────────────────────────
+# FLEET SERVICES tab – with refueling and tolls in trips table
+# ────────────────────────────────────────────────
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
-    st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips.")
+    st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips (including refuelling and tolls).")
 
     vehicles = [
         {"id": 1, "reg": "JM 45 CY GP", "short": "Vehicle 1"},
@@ -156,22 +159,21 @@ with tab_fleet:
             c3.markdown(f"**Last service**  \n{status['last_service']}")
             c3.markdown(f"**Alerts**  \n<span class='{alert_cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
 
-            # Mileage chart with UNIQUE KEY to fix duplicate ID error
+            # Mileage chart
             dates = [datetime.now().date() - timedelta(days=x) for x in range(13, -1, -1)]
-            km_list = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]  # dummy data
+            km_list = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]
             df_mileage = pd.DataFrame({"Date": dates, "Daily km": km_list})
             fig = px.line(df_mileage, x="Date", y="Daily km", title="Last 14 days mileage trend")
             fig.update_traces(line_color="#005c28")
             fig.update_layout(margin=dict(l=20, r=20, t=40, b=20), height=300)
 
-            st.plotly_chart(
-                fig,
-                use_container_width=True,
-                key=f"fleet_mileage_chart_{vid}"   # ← Critical fix: unique per vehicle
-            )
+            st.plotly_chart(fig, use_container_width=True, key=f"mileage_chart_vehicle_{vid}")
 
-            # Recent trips table with unique key (good practice)
-            st.subheader("Recent trips / logs")
+            # ────────────────────────────────────────────────
+            # Recent trips / logs – including refuelling and tolls
+            # ────────────────────────────────────────────────
+            st.subheader(f"Recent trips / logs – {reg}")
+
             trips_data = pd.DataFrame({
                 "Date": ["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"],
                 "Driver": ["J. Smith", "A. Nkosi", "M. Botha", "S. Naidoo"],
@@ -179,14 +181,74 @@ with tab_fleet:
                 "Start Odo": [124600, 124500, 124200, 123900],
                 "End Odo": [124950, 124850, 124400, 124150],
                 "Distance (km)": [350, 350, 200, 250],
-                "Notes": ["", "Refuelled 40L", "", "Tyre check completed"]
+                "Fuel Added (L)": [0.0, 40.0, 0.0, 28.5],
+                "Fuel Cost (R)": [0.00, 880.00, 0.00, 627.00],
+                "Odo at Refuel": [0, 124520, 0, 124120],
+                "Toll Amount (R)": [45.00, 0.00, 120.00, 0.00],
+                "Toll Plaza / Notes": ["N3 Mariannhill", "", "N1 Huguenot", ""]
             })
-            st.data_editor(
+
+            column_config = {
+                "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD", required=True),
+                "Driver": st.column_config.TextColumn("Driver", required=True),
+                "Purpose": st.column_config.TextColumn("Purpose"),
+                "Start Odo": st.column_config.NumberColumn("Start Odo", min_value=0, format="%d km"),
+                "End Odo": st.column_config.NumberColumn("End Odo", min_value=0, format="%d km"),
+                "Distance (km)": st.column_config.NumberColumn("Distance (km)", min_value=0, format="%d km"),
+                
+                # Refuelling columns
+                "Fuel Added (L)": st.column_config.NumberColumn(
+                    "Fuel Added (L)",
+                    min_value=0.0,
+                    format="%.1f L",
+                    help="Litres added during or after this trip (0 = no refuelling)"
+                ),
+                "Fuel Cost (R)": st.column_config.NumberColumn(
+                    "Fuel Cost (R)",
+                    min_value=0.0,
+                    format="R %.2f",
+                    help="Total cost for fuel added"
+                ),
+                "Odo at Refuel": st.column_config.NumberColumn(
+                    "Odo at Refuel",
+                    min_value=0,
+                    format="%d km",
+                    help="Odometer reading when fuel was added (0 = no refuelling)"
+                ),
+                
+                # Tolls columns
+                "Toll Amount (R)": st.column_config.NumberColumn(
+                    "Toll Amount (R)",
+                    min_value=0.0,
+                    format="R %.2f",
+                    help="Toll fees paid during this trip"
+                ),
+                "Toll Plaza / Notes": st.column_config.TextColumn(
+                    "Toll Plaza / Notes",
+                    help="e.g. N3 Mariannhill, e-toll invoice number, etc."
+                )
+            }
+
+            edited_trips = st.data_editor(
                 trips_data,
+                column_config=column_config,
                 num_rows="dynamic",
                 use_container_width=True,
-                key=f"fleet_trips_editor_{vid}"   # ← Unique key here too
+                hide_index=True,
+                key=f"trips_log_vehicle_{vid}"
             )
+
+            # Summary metrics
+            if not edited_trips.empty:
+                total_distance = edited_trips["Distance (km)"].sum()
+                total_fuel_cost = edited_trips["Fuel Cost (R)"].sum()
+                total_tolls = edited_trips["Toll Amount (R)"].sum()
+
+                colA, colB, colC = st.columns(3)
+                colA.metric("Total Distance", f"{total_distance:,} km")
+                colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}")
+                colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}")
+
 # ────────────────────────────────────────────────
 # Footer
 # ────────────────────────────────────────────────
