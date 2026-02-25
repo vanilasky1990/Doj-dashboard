@@ -9,7 +9,7 @@ from typing import Dict
 # ────────────────────────────────────────────────
 st.set_page_config(
     page_title="DOJ&CD - MC Tsakane Dashboard",
-    page_icon="⚖️",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
