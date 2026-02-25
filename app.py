@@ -159,6 +159,61 @@ with tab_home:
     )
 
     st.caption("Next service triggered by whichever comes first: 6 months or 15,000 km since last service.")
+# ── After st.dataframe(summary_df, ...) ──
+
+st.markdown("### Fuel Efficiency Overview")
+
+fleet_total_distance = 0
+fleet_total_fuel = 0
+
+per_vehicle_efficiency = []
+
+for v in vehicles:
+    vid = v["id"]
+    sk = f"trips_vehicle_{vid}"
+    if sk in st.session_state and not st.session_state[sk].empty:
+        dfv = st.session_state[sk]
+        dist = dfv["Distance (km)"].sum()
+        fuel = dfv["Fuel Added (L)"].sum()
+        
+        fleet_total_distance += dist
+        fleet_total_fuel += fuel
+        
+        if dist > 0 and fuel > 0:
+            eff = (fuel / dist) * 100
+            eff_str = f"{eff:.1f} L/100 km"
+        else:
+            eff_str = "—"
+            
+        per_vehicle_efficiency.append(eff_str)
+    else:
+        per_vehicle_efficiency.append("—")
+
+if fleet_total_distance > 0 and fleet_total_fuel > 0:
+    fleet_avg_eff = (fleet_total_fuel / fleet_total_distance) * 100
+    fleet_eff_display = f"{fleet_avg_eff:.1f} L/100 km"
+else:
+    fleet_eff_display = "Not enough data"
+
+colA, colB = st.columns(2)
+colA.metric("Fleet Average Fuel Efficiency", fleet_eff_display)
+colB.metric("Best Vehicle Efficiency", min([e for e in per_vehicle_efficiency if e != "—"] or ["—"]))
+
+# Add efficiency to the existing summary table
+summary_df["Fuel Efficiency"] = per_vehicle_efficiency
+st.dataframe(
+    summary_df,
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Fuel": st.column_config.TextColumn("Fuel"),
+        "Km Remaining": st.column_config.TextColumn("Km Remaining"),
+        "Fuel Efficiency": st.column_config.TextColumn("Fuel Efficiency"),
+        "Status": st.column_config.TextColumn("Service Status")
+    }
+)
+
+
 
 # ────────────────────────────────────────────────
 # SUNDRY tab
