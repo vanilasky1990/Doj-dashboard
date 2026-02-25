@@ -2,25 +2,16 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta, time
-from typing import Dict
 import io
 
 # ────────────────────────────────────────────────
-# Page configuration
+# Page config & styling
 # ────────────────────────────────────────────────
-st.set_page_config(
-    page_title="DOJ&CD - MC Tsakane Dashboard",
-    page_icon="⚖️",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="DOJ&CD - MC Tsakane Dashboard", page_icon="⚖️", layout="wide", initial_sidebar_state="collapsed")
 
-# ────────────────────────────────────────────────
-# Styling
-# ────────────────────────────────────────────────
 st.markdown("""
     <style>
-    .stApp { background-color: #f9fbfd; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .stApp { background-color: #f9fbfd; font-family: 'Segoe UI', sans-serif; }
     .header { 
         background-color: #FFB612; 
         color: #1a1a1a; 
@@ -39,9 +30,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# Vehicle status lookup
+# Vehicle status
 # ────────────────────────────────────────────────
-def get_vehicle_status(vehicle_id: int) -> Dict:
+def get_vehicle_status(vehicle_id: int) -> dict:
     data = {
         1: {"location": "JHB Magistrate Court", "fuel": 65, "odo": 124850, "last_service": "2025-11-15", "alerts": "None"},
         2: {"location": "En Route to CPT",      "fuel": 28, "odo": 98740,  "last_service": "2025-10-20", "alerts": "Low Fuel Warning"},
@@ -50,26 +41,20 @@ def get_vehicle_status(vehicle_id: int) -> Dict:
     return data.get(vehicle_id, {"location": "Unknown", "fuel": 0, "odo": 0, "last_service": "N/A", "alerts": "N/A"})
 
 # ────────────────────────────────────────────────
-# Estimate next service
+# Next service estimate
 # ────────────────────────────────────────────────
-def estimate_next_service(status: Dict):
+def estimate_next_service(status: dict):
     last_date = datetime.strptime(status["last_service"], "%Y-%m-%d").date()
-    next_by_time = last_date + timedelta(days=180)
-    
+    next_date = last_date + timedelta(days=180)
     km_since = status["odo"] % 15000
-    km_remaining = 15000 - km_since
-    next_by_km = f"+{km_remaining:,} km"
-    
-    return next_by_time.strftime("%Y-%m-%d"), next_by_km, km_remaining
+    km_rem = 15000 - km_since
+    return next_date.strftime("%Y-%m-%d"), f"+{km_rem:,} km", km_rem
 
 # ────────────────────────────────────────────────
-# Header with reliable coat of arms
+# Header (fixed SVG)
 # ────────────────────────────────────────────────
 st.markdown('<div class="header">', unsafe_allow_html=True)
-st.image(
-    "https://upload.wikimedia.org/wikipedia/commons/e/e9/Coat_of_arms_of_South_Africa.svg",
-    width=160
-)
+st.image("https://upload.wikimedia.org/wikipedia/commons/e/e9/Coat_of_arms_of_South_Africa.svg", width=160)
 st.markdown(f"""
     <h1>MC Tsakane Dashboard</h1>
     <h3>Department of Justice and Constitutional Development</h3>
@@ -78,11 +63,13 @@ st.markdown(f"""
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
-# Main tabs
+# Tabs
 # ────────────────────────────────────────────────
 tab_home, tab_sundry, tab_fleet = st.tabs(["HOME", "SUNDRY", "FLEET SERVICES"])
 
-# HOME TAB
+# ────────────────────────────────────────────────
+# HOME
+# ────────────────────────────────────────────────
 with tab_home:
     st.subheader("Witness Fees – Monthly Expenditure Overview")
 
@@ -90,74 +77,45 @@ with tab_home:
     amounts = [45000, 62000, 38000, 75000, 51000, 89000, 42000, 67000, 93000, 55000, 48000, 72000]
     df = pd.DataFrame({"Month": months, "Amount (ZAR)": amounts})
 
-    fig = px.bar(df, x="Month", y="Amount (ZAR)", title=f"Monthly Witness Fees Expenditure {datetime.now().year}",
+    fig = px.bar(df, x="Month", y="Amount (ZAR)", title=f"Monthly Witness Fees {datetime.now().year}",
                  color="Amount (ZAR)", color_continuous_scale="Greens", text_auto=",.0f")
     fig.update_layout(showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
     st.subheader("🚗 Fleet Health & Service Overview")
-    st.markdown("Current status and estimated next service (6 months or 15,000 km interval).")
 
-    vehicles = [
-        {"id": 1, "reg": "JM 45 CY GP"},
-        {"id": 2, "reg": "BW 47 KG GP"},
-        {"id": 3, "reg": "LR 93 VW GP"},
-    ]
+    vehicles = [{"id": 1, "reg": "JM 45 CY GP"}, {"id": 2, "reg": "BW 47 KG GP"}, {"id": 3, "reg": "LR 93 VW GP"}]
 
     summary_data = []
     for v in vehicles:
-        status = get_vehicle_status(v["id"])
-        next_date, next_km, km_remaining = estimate_next_service(status)
-        
-        days_to_service = (datetime.strptime(next_date, "%Y-%m-%d").date() - datetime.now().date()).days
-        
-        if days_to_service < 30 or km_remaining < 2000:
-            service_status = "🟥 Due Soon"
-        elif days_to_service < 90 or km_remaining < 5000:
-            service_status = "🟧 Approaching"
-        else:
-            service_status = "🟩 On Track"
+        s = get_vehicle_status(v["id"])
+        next_d, next_k, km_r = estimate_next_service(s)
+        days_left = (datetime.strptime(next_d, "%Y-%m-%d").date() - datetime.now().date()).days
+        status = "🟥 Due Soon" if days_left < 30 or km_r < 2000 else "🟧 Approaching" if days_left < 90 or km_r < 5000 else "🟩 On Track"
 
         summary_data.append({
-            "Vehicle": v["reg"],
-            "Location": status["location"],
-            "Fuel": f"{status['fuel']}%",
-            "Odometer": f"{status['odo']:,} km",
-            "Last Service": status["last_service"],
-            "Next Service (Date)": next_date,
-            "Km Remaining": next_km,
-            "Status": service_status
+            "Vehicle": v["reg"], "Location": s["location"], "Fuel": f"{s['fuel']}%", "Odometer": f"{s['odo']:,} km",
+            "Last Service": s["last_service"], "Next Service (Date)": next_d, "Km Remaining": next_k, "Status": status
         })
 
     summary_df = pd.DataFrame(summary_data)
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total Vehicles", len(vehicles))
-    avg_fuel = sum(get_vehicle_status(i)["fuel"] for i in range(1, 4)) / len(vehicles)
-    col2.metric("Avg Fuel Level", f"{avg_fuel:.0f}%")
-    total_odo = sum(get_vehicle_status(i)["odo"] for i in range(1, 4))
-    col3.metric("Total Fleet Odometer", f"{total_odo:,} km")
-    due_soon = len([r for r in summary_data if "Due Soon" in r["Status"]])
-    col4.metric("Vehicles Needing Attention", due_soon)
+    col2.metric("Avg Fuel Level", f"{sum(get_vehicle_status(i)['fuel'] for i in range(1,4))/3:.0f}%")
+    col3.metric("Total Fleet Odometer", f"{sum(get_vehicle_status(i)['odo'] for i in range(1,4)):,} km")
+    col4.metric("Vehicles Needing Attention", len([r for r in summary_data if "Due Soon" in r["Status"]]))
 
-    st.dataframe(
-        summary_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Fuel": st.column_config.TextColumn("Fuel"),
-            "Km Remaining": st.column_config.TextColumn("Km Remaining"),
-            "Status": st.column_config.TextColumn("Service Status")
-        }
-    )
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
-    st.caption("Next service triggered by whichever comes first: 6 months or 15,000 km since last service.")
+    st.caption("Next service: earlier of 6 months or 15,000 km since last service.")
 
-# SUNDRY TAB
+# ────────────────────────────────────────────────
+# SUNDRY
+# ────────────────────────────────────────────────
 with tab_sundry:
     st.subheader("Witness Fees Register")
-
     sample_data = {
         "Date": ["2026-01-15", "2026-01-22", "2026-02-05", "2026-02-10", "2026-02-18"],
         "Witness Name": ["A. Nkosi", "B. Mthembu", "C. v/d Merwe", "D. Pillay", "E. Sithole"],
@@ -166,7 +124,6 @@ with tab_sundry:
         "Status": ["Paid", "Pending Approval", "Paid", "Awaiting Receipt", "Paid"],
         "Court/Office": ["JHB Magistrate", "CPT High", "DBN Regional", "JHB High", "PE Magistrate"]
     }
-
     df = pd.DataFrame(sample_data)
     edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
 
@@ -177,7 +134,9 @@ with tab_sundry:
     col1.metric("Total Spent", f"R {total_spent:,.2f}")
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
 
-# FLEET SERVICES TAB – fixed duplication & auto-distance
+# ────────────────────────────────────────────────
+# FLEET SERVICES – main tab
+# ────────────────────────────────────────────────
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
     st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips/logs.")
@@ -198,28 +157,18 @@ with tab_fleet:
 
         session_key = f"trips_vehicle_{vid}"
         if session_key not in st.session_state:
-            st.session_state[session_key] = pd.DataFrame({
-                "Date": pd.to_datetime(["2026-02-20", "2026-02-20", "2026-02-20", "2026-02-20", "2026-02-15"]),
-                "Time": [time(8, 45), time(10, 15), time(13, 40), time(15, 20), None],
-                "Driver": ["J. Smith", "J. Smith", "J. Smith", "J. Smith", "A. Nkosi"],
-                "Purpose": ["Court transfer JHB-DBN", "Toll", "Toll", "Toll", "Site inspection"],
-                "Start Odo": [124600, 124700, 124820, 124900, 124500],
-                "End Odo": [124950, 124700, 124820, 124900, 124850],
-                "Distance (km)": [350, 0, 0, 0, 350],
-                "Fuel Added (L)": [0.0, 0.0, 0.0, 0.0, 40.0],
-                "Fuel Cost (R)": [0.00, 0.00, 0.00, 0.00, 880.00],
-                "Odo at Refuel": [0, 0, 0, 0, 124520],
-                "Toll Amount (R)": [0.00, 45.00, 28.50, 17.00, 0.00],
-                "Toll Plaza / Notes": ["", "N3 Mariannhill", "N3 Cedara", "N3 Westville", ""]
-            })
+            st.session_state[session_key] = pd.DataFrame(columns=[
+                "Date", "Time", "Driver", "Purpose", "Start Odo", "End Odo", "Distance (km)",
+                "Fuel Added (L)", "Fuel Cost (R)", "Odo at Refuel", "Toll Amount (R)", "Toll Plaza / Notes"
+            ])
 
         current_trips = st.session_state[session_key].copy()
 
-        # Auto-calculate Distance (read-only)
+        # Auto-calculate Distance
         current_trips["Distance (km)"] = current_trips.apply(
-            lambda row: max(0, row["End Odo"] - row["Start Odo"])
-            if pd.notna(row["Start Odo"]) and pd.notna(row["End Odo"])
-            else row.get("Distance (km)", 0),
+            lambda r: max(0, r["End Odo"] - r["Start Odo"])
+            if pd.notna(r["Start Odo"]) and pd.notna(r["End Odo"])
+            else 0,
             axis=1
         )
 
@@ -229,10 +178,9 @@ with tab_fleet:
             c1, c2, c3 = st.columns([2, 2, 1.4])
             c1.markdown(f"**Current location**  \n{status['location']}")
             fuel_color = "green" if status["fuel"] > 50 else "orange" if status["fuel"] > 20 else "red"
-            with c2:
-                c2.markdown(f"**Fuel level**  \n<span style='color:{fuel_color}'>{status['fuel']}%</span>", unsafe_allow_html=True)
-                c2.progress(status["fuel"] / 100)
-                c2.markdown(f"**Odometer**  \n{status['odo']:,} km")
+            c2.markdown(f"**Fuel level**  \n<span style='color:{fuel_color}'>{status['fuel']}%</span>", unsafe_allow_html=True)
+            c2.progress(status["fuel"] / 100)
+            c2.markdown(f"**Odometer**  \n{status['odo']:,} km")
             alert_cls = "status-good" if "None" in status["alerts"] else "status-warning" if "Low" in status["alerts"] else "status-alert"
             c3.markdown(f"**Last service**  \n{status['last_service']}")
             c3.markdown(f"**Alerts**  \n<span class='{alert_cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
@@ -263,7 +211,7 @@ with tab_fleet:
 
             with subtab_logs:
                 st.subheader(f"Recent trips / logs – {reg}")
-                st.caption("Distance is automatically calculated from End Odo - Start Odo (read-only).")
+                st.caption("Distance is auto-calculated from End Odo - Start Odo (read-only).")
 
                 column_config = {
                     "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD", required=True),
@@ -272,13 +220,7 @@ with tab_fleet:
                     "Purpose": st.column_config.TextColumn("Purpose"),
                     "Start Odo": st.column_config.NumberColumn("Start Odo", min_value=0, format="%d km"),
                     "End Odo": st.column_config.NumberColumn("End Odo", min_value=0, format="%d km"),
-                    "Distance (km)": st.column_config.NumberColumn(
-                        "Distance (km)",
-                        min_value=0,
-                        format="%d km",
-                        disabled=True,
-                        help="Auto-calculated: End Odo - Start Odo"
-                    ),
+                    "Distance (km)": st.column_config.NumberColumn("Distance (km)", min_value=0, format="%d km", disabled=True, help="Auto: End Odo - Start Odo"),
                     "Fuel Added (L)": st.column_config.NumberColumn("Fuel Added (L)", min_value=0.0, format="%.1f L"),
                     "Fuel Cost (R)": st.column_config.NumberColumn("Fuel Cost (R)", min_value=0.0, format="R %.2f"),
                     "Odo at Refuel": st.column_config.NumberColumn("Odo at Refuel", min_value=0, format="%d km"),
@@ -286,7 +228,7 @@ with tab_fleet:
                     "Toll Plaza / Notes": st.column_config.TextColumn("Toll Plaza / Notes")
                 }
 
-                # Pagination
+                # Pagination (20 rows/page)
                 rows_per_page = 20
                 total_rows = len(current_trips)
                 total_pages = max(1, (total_rows + rows_per_page - 1) // rows_per_page)
@@ -316,16 +258,14 @@ with tab_fleet:
                     key=f"trips_editor_page_{vid}_{page}"
                 )
 
-                # Save edits back correctly (no duplication)
+                # Safe update (no duplication)
                 if not edited_page.empty:
-                    # Align indices to avoid pandas assertion error
                     edited_page.index = current_trips.index[start_idx:end_idx]
-                    # Use loc to assign
                     current_trips.loc[current_trips.index[start_idx:end_idx]] = edited_page.values
                     st.session_state[session_key] = current_trips
 
                 st.caption(f"Showing rows {start_idx+1}–{min(end_idx, total_rows)} of {total_rows}")
-                st.metric("Total log entries", total_rows, delta=None)
+                st.metric("Total log entries", total_rows)
 
                 if total_rows > 0:
                     total_distance = current_trips["Distance (km)"].sum()
@@ -441,39 +381,27 @@ with tab_fleet:
                     st.dataframe(monthly_summary, use_container_width=True)
 
                     st.markdown("#### All Trips & Slips in Selected Month")
-                    st.dataframe(
-                        monthly_trips,
-                        use_container_width=True,
-                        column_config=column_config,
-                        hide_index=False
-                    )
+                    st.dataframe(monthly_trips, use_container_width=True, hide_index=False)
 
                     fig_month = px.bar(monthly_summary.T.reset_index(),
                                        x='index', y='Total',
-                                       title=f"Summary for {selected_month_str}",
-                                       labels={'index': 'Category', 'Total': 'Amount'})
-                    st.plotly_chart(
-                        fig_month,
-                        use_container_width=True,
-                        key=f"monthly_report_chart_vehicle_{vid}_{selected_month_str}"
-                    )
+                                       title=f"Summary for {selected_month_str}")
+                    st.plotly_chart(fig_month, use_container_width=True, key=f"monthly_chart_{vid}_{selected_month_str}")
 
-                    # CSV Export
+                    # CSV
                     csv_buffer = io.StringIO()
                     monthly_trips.to_csv(csv_buffer, index=False)
                     csv_data = csv_buffer.getvalue()
 
-                    filename_csv = f"Trips_{reg.replace(' ', '_')}_{selected_month_str}.csv"
-
                     st.download_button(
-                        label="📥 Download Full Monthly Trips (CSV)",
+                        label="📥 Download Trips (CSV)",
                         data=csv_data,
-                        file_name=filename_csv,
+                        file_name=f"Trips_{reg.replace(' ', '_')}_{selected_month_str}.csv",
                         mime="text/csv",
-                        key=f"download_csv_{vid}_{selected_month_str}"
+                        key=f"csv_{vid}_{selected_month_str}"
                     )
 
-                    # Excel Export
+                    # Excel
                     excel_buffer = io.BytesIO()
                     with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
                         monthly_trips.to_excel(writer, sheet_name='Trips & Slips', index=False)
@@ -481,21 +409,16 @@ with tab_fleet:
 
                     excel_buffer.seek(0)
 
-                    filename_excel = f"Monthly_Report_{reg.replace(' ', '_')}_{selected_month_str}.xlsx"
-
                     st.download_button(
-                        label="📊 Download Monthly Report (Excel .xlsx)",
+                        label="📊 Download Report (Excel)",
                         data=excel_buffer,
-                        file_name=filename_excel,
+                        file_name=f"Monthly_Report_{reg.replace(' ', '_')}_{selected_month_str}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key=f"download_excel_{vid}_{selected_month_str}"
+                        key=f"excel_{vid}_{selected_month_str}"
                     )
 
                 else:
-                    st.info("No trip data yet. Add entries in the Trip Logs tab.")
+                    st.info("No trip data yet. Add entries in Trip Logs.")
 
-# ────────────────────────────────────────────────
-# Footer
-# ────────────────────────────────────────────────
 st.markdown("---")
 st.caption(f"© Department of Justice and Constitutional Development • {datetime.now().year} • Internal use only")
