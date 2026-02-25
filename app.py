@@ -49,7 +49,7 @@ def get_vehicle_status(vehicle_id: int) -> Dict:
     return data.get(vehicle_id, {"location": "Unknown", "fuel": 0, "odo": 0, "last_service": "N/A", "alerts": "N/A"})
 
 # ────────────────────────────────────────────────
-# Estimate next service (6 months OR 15,000 km rule)
+# Estimate next service (15,000 km rule)
 # ────────────────────────────────────────────────
 def estimate_next_service(status: Dict):
     last_date_str = status["last_service"]
