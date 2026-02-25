@@ -1,18 +1,264 @@
-streamlit.errors.StreamlitAPIException: This app has encountered an error. The original error message is redacted to prevent data leaks. Full error details have been recorded in the logs (if you're on Streamlit Cloud, click on 'Manage app' in the lower right of your app).
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from datetime import datetime, timedelta
+from typing import Dict
 
-Traceback:
-File "/mount/src/doj-dashboard/app.py", line 232, in <module>
-    edited_trips = st.data_editor(
-        trips_data,
-    ...<4 lines>...
-        key=f"trips_log_vehicle_{vid}"
+# ────────────────────────────────────────────────
+# Page configuration
+# ────────────────────────────────────────────────
+st.set_page_config(
+    page_title="DOJ&CD - MC Tsakane Dashboard",
+    page_icon="⚖️",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# ────────────────────────────────────────────────
+# Styling - solid orange header
+# ────────────────────────────────────────────────
+st.markdown("""
+    <style>
+    .stApp { background-color: #f9fbfd; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .header { 
+        background-color: #FFB612; 
+        color: #1a1a1a; 
+        padding: 30px 20px; 
+        text-align: center; 
+        border-bottom: 4px solid #005c28; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .header h1 { margin: 0; font-size: 2.6rem; font-weight: 700; }
+    .header h3 { margin: 10px 0 0; font-size: 1.45rem; font-weight: 400; }
+    .header p { margin: 10px 0 0; font-size: 1.15rem; opacity: 0.9; }
+    .status-good    { color: #006400; font-weight: bold; }
+    .status-warning { color: #d2691e; font-weight: bold; }
+    .status-alert   { color: #c00000; font-weight: bold; }
+    </style>
+""", unsafe_allow_html=True)
+
+# ────────────────────────────────────────────────
+# Vehicle status lookup
+# ────────────────────────────────────────────────
+def get_vehicle_status(vehicle_id: int) -> Dict:
+    data = {
+        1: {"location": "JHB Magistrate Court", "fuel": 65, "odo": 124850, "last_service": "2025-11-15", "alerts": "None"},
+        2: {"location": "En Route to CPT",      "fuel": 28, "odo": 98740,  "last_service": "2025-10-20", "alerts": "Low Fuel Warning"},
+        3: {"location": "Parked - PE Office",   "fuel": 92, "odo": 156320, "last_service": "2026-01-10", "alerts": "Service Due Soon"}
+    }
+    return data.get(vehicle_id, {"location": "Unknown", "fuel": 0, "odo": 0, "last_service": "N/A", "alerts": "N/A"})
+
+# ────────────────────────────────────────────────
+# Header - solid orange
+# ────────────────────────────────────────────────
+st.markdown('<div class="header">', unsafe_allow_html=True)
+st.image(
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Coat_of_arms_of_South_Africa.svg/200px-Coat_of_arms_of_South_Africa.svg.png",
+    width=160
+)
+st.markdown(f"""
+    <h1>MC Tsakane Dashboard</h1>
+    <h3>Department of Justice and Constitutional Development</h3>
+    <p>Internal Use • {datetime.now().year}</p>
+""", unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ────────────────────────────────────────────────
+# Main tabs
+# ────────────────────────────────────────────────
+tab_home, tab_sundry, tab_fleet = st.tabs(["HOME", "SUNDRY", "FLEET SERVICES"])
+
+# ────────────────────────────────────────────────
+# HOME tab
+# ────────────────────────────────────────────────
+with tab_home:
+    st.subheader("Witness Fees – Monthly Expenditure Overview")
+
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    amounts = [45000, 62000, 38000, 75000, 51000, 89000, 42000, 67000, 93000, 55000, 48000, 72000]
+
+    df = pd.DataFrame({"Month": months, "Amount (ZAR)": amounts})
+
+    fig = px.bar(
+        df,
+        x="Month",
+        y="Amount (ZAR)",
+        title=f"Monthly Witness Fees Expenditure {datetime.now().year}",
+        color="Amount (ZAR)",
+        color_continuous_scale="Greens",
+        text_auto=",.0f"
     )
-File "/home/adminuser/venv/lib/python3.13/site-packages/streamlit/runtime/metrics_util.py", line 532, in wrapped_func
-    result = non_optional_func(*args, **kwargs)
-File "/home/adminuser/venv/lib/python3.13/site-packages/streamlit/elements/widgets/data_editor.py", line 1071, in data_editor
-    _check_type_compatibilities(data_df, column_config_mapping, dataframe_schema)
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-File "/home/adminuser/venv/lib/python3.13/site-packages/streamlit/elements/widgets/data_editor.py", line 606, in _check_type_compatibilities
-    raise StreamlitAPIException(
-    ...<5 lines>...
-    )
+    fig.update_layout(showlegend=False)
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    if st.button("View detailed witness fees table"):
+        st.info("Please switch to the **SUNDRY** tab above")
+
+# ────────────────────────────────────────────────
+# SUNDRY tab
+# ────────────────────────────────────────────────
+with tab_sundry:
+    st.subheader("Witness Fees Register")
+
+    sample_data = {
+        "Date": ["2026-01-15", "2026-01-22", "2026-02-05", "2026-02-10", "2026-02-18"],
+        "Witness Name": ["A. Nkosi", "B. Mthembu", "C. v/d Merwe", "D. Pillay", "E. Sithole"],
+        "Case Number": ["JHB/2026/001", "CPT/2026/045", "DBN/2026/112", "JHB/2026/078", "PE/2026/023"],
+        "Amount Paid (ZAR)": [1200.00, 850.00, 1500.00, 950.00, 1100.00],
+        "Status": ["Paid", "Pending Approval", "Paid", "Awaiting Receipt", "Paid"],
+        "Court/Office": ["JHB Magistrate", "CPT High", "DBN Regional", "JHB High", "PE Magistrate"]
+    }
+
+    df = pd.DataFrame(sample_data)
+    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+
+    total_spent = edited_df["Amount Paid (ZAR)"].sum()
+    pending = edited_df[edited_df["Status"].isin(["Pending Approval", "Awaiting Receipt"])]["Amount Paid (ZAR)"].sum()
+
+    col1, col2 = st.columns(2)
+    col1.metric("Total Spent", f"R {total_spent:,.2f}")
+    col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
+
+# ────────────────────────────────────────────────
+# FLEET SERVICES tab – with refuelling and tolls
+# ────────────────────────────────────────────────
+with tab_fleet:
+    st.subheader("Fleet Services – Gauteng Region")
+    st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips (including refuelling and tolls).")
+
+    vehicles = [
+        {"id": 1, "reg": "JM 45 CY GP", "short": "Vehicle 1"},
+        {"id": 2, "reg": "BW 47 KG GP", "short": "Vehicle 2"},
+        {"id": 3, "reg": "LR 93 VW GP", "short": "Vehicle 3"},
+    ]
+
+    vehicle_tabs = st.tabs([f"{v['short']} ({v['reg']})" for v in vehicles])
+
+    for idx, tab in enumerate(vehicle_tabs):
+        veh = vehicles[idx]
+        vid = veh["id"]
+        reg = veh["reg"]
+        status = get_vehicle_status(vid)
+
+        with tab:
+            st.markdown(f"### {reg}")
+
+            # Status overview
+            c1, c2, c3 = st.columns([2, 2, 1.4])
+
+            c1.markdown(f"**Current location**  \n{status['location']}")
+
+            fuel_color = "green" if status["fuel"] > 50 else "orange" if status["fuel"] > 20 else "red"
+            with c2:
+                c2.markdown(f"**Fuel level**  \n<span style='color:{fuel_color}'>{status['fuel']}%</span>", unsafe_allow_html=True)
+                c2.progress(status["fuel"] / 100)
+                c2.markdown(f"**Odometer**  \n{status['odo']:,} km")
+
+            alert_cls = "status-good" if "None" in status["alerts"] else "status-warning" if "Low" in status["alerts"] else "status-alert"
+            c3.markdown(f"**Last service**  \n{status['last_service']}")
+            c3.markdown(f"**Alerts**  \n<span class='{alert_cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
+
+            # Mileage chart
+            dates = [datetime.now().date() - timedelta(days=x) for x in range(13, -1, -1)]
+            km_list = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]
+            df_mileage = pd.DataFrame({"Date": dates, "Daily km": km_list})
+            fig = px.line(df_mileage, x="Date", y="Daily km", title="Last 14 days mileage trend")
+            fig.update_traces(line_color="#005c28")
+            fig.update_layout(margin=dict(l=20, r=20, t=40, b=20), height=300)
+
+            st.plotly_chart(fig, use_container_width=True, key=f"mileage_chart_vehicle_{vid}")
+
+            # ────────────────────────────────────────────────
+            # Recent trips / logs – including refuelling and tolls
+            # ────────────────────────────────────────────────
+            st.subheader(f"Recent trips / logs – {reg}")
+
+            trips_data = pd.DataFrame({
+                "Date": ["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"],
+                "Driver": ["J. Smith", "A. Nkosi", "M. Botha", "S. Naidoo"],
+                "Purpose": ["Court appearance", "Site inspection", "Maintenance", "Vehicle transfer"],
+                "Start Odo": [124600, 124500, 124200, 123900],
+                "End Odo": [124950, 124850, 124400, 124150],
+                "Distance (km)": [350, 350, 200, 250],
+                "Fuel Added (L)": [0.0, 40.0, 0.0, 28.5],
+                "Fuel Cost (R)": [0.00, 880.00, 0.00, 627.00],
+                "Odo at Refuel": [0, 124520, 0, 124120],
+                "Toll Amount (R)": [45.00, 0.00, 120.00, 0.00],
+                "Toll Plaza / Notes": ["N3 Mariannhill", "", "N1 Huguenot", ""]
+            })
+
+            # FIX: Convert Date strings → datetime objects
+            trips_data["Date"] = pd.to_datetime(trips_data["Date"], format="%Y-%m-%d", errors="coerce")
+
+            column_config = {
+                "Date": st.column_config.DateColumn(
+                    "Date",
+                    format="YYYY-MM-DD",
+                    required=True,
+                    help="Trip date (date picker available)"
+                ),
+                "Driver": st.column_config.TextColumn("Driver", required=True),
+                "Purpose": st.column_config.TextColumn("Purpose"),
+                "Start Odo": st.column_config.NumberColumn("Start Odo", min_value=0, format="%d km"),
+                "End Odo": st.column_config.NumberColumn("End Odo", min_value=0, format="%d km"),
+                "Distance (km)": st.column_config.NumberColumn("Distance (km)", min_value=0, format="%d km"),
+                
+                # Refuelling columns
+                "Fuel Added (L)": st.column_config.NumberColumn(
+                    "Fuel Added (L)",
+                    min_value=0.0,
+                    format="%.1f L",
+                    help="Litres added during or after this trip (0 = no refuelling)"
+                ),
+                "Fuel Cost (R)": st.column_config.NumberColumn(
+                    "Fuel Cost (R)",
+                    min_value=0.0,
+                    format="R %.2f",
+                    help="Total cost for fuel added"
+                ),
+                "Odo at Refuel": st.column_config.NumberColumn(
+                    "Odo at Refuel",
+                    min_value=0,
+                    format="%d km",
+                    help="Odometer reading when fuel was added (0 = no refuelling)"
+                ),
+                
+                # Tolls columns
+                "Toll Amount (R)": st.column_config.NumberColumn(
+                    "Toll Amount (R)",
+                    min_value=0.0,
+                    format="R %.2f",
+                    help="Toll fees paid during this trip"
+                ),
+                "Toll Plaza / Notes": st.column_config.TextColumn(
+                    "Toll Plaza / Notes",
+                    help="e.g. N3 Mariannhill, e-toll invoice number, etc."
+                )
+            }
+
+            edited_trips = st.data_editor(
+                trips_data,
+                column_config=column_config,
+                num_rows="dynamic",
+                use_container_width=True,
+                hide_index=True,
+                key=f"trips_log_vehicle_{vid}"
+            )
+
+            # Summary metrics
+            if not edited_trips.empty:
+                total_distance = edited_trips["Distance (km)"].sum()
+                total_fuel_cost = edited_trips["Fuel Cost (R)"].sum()
+                total_tolls = edited_trips["Toll Amount (R)"].sum()
+
+                colA, colB, colC = st.columns(3)
+                colA.metric("Total Distance", f"{total_distance:,} km")
+                colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}")
+                colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}")
+
+# ────────────────────────────────────────────────
+# Footer
+# ────────────────────────────────────────────────
+st.markdown("---")
+st.caption(f"© Department of Justice and Constitutional Development • {datetime.now().year} • Internal use only")
