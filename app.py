@@ -75,7 +75,7 @@ st.image(
 st.markdown(f"""
     <h1>MC Tsakane Dashboard</h1>
     <h3>Department of Justice and Constitutional Development</h3>
-    <p>Internal Use • {datetime.now().year}</p>
+    <p>My dashboard {datetime.now().year}</p>
 """, unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
