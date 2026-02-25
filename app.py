@@ -163,7 +163,7 @@ with tab_fleet:
             df_mileage = pd.DataFrame({"Date": dates, "Daily km": km_list})
             fig = px.line(df_mileage, x="Date", y="Daily km", title="Last 14 days mileage")
             fig.update_traces(line_color="#005c28")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="something_unique_here")
 
             # Trips log
             st.subheader("Recent trips")
