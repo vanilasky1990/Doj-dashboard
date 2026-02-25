@@ -115,7 +115,6 @@ with tab_sundry:
     col1, col2 = st.columns(2)
     col1.metric("Total Spent", f"R {total:,.2f}")
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
-
 # ────────────────────────────────────────────────
 # FLEET SERVICES – one tab per vehicle
 # ────────────────────────────────────────────────
@@ -123,9 +122,9 @@ with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
 
     vehicles = [
-        {"id":1, "reg":"JM 45 CY GP", "short":"Vehicle 1"},
-        {"id":2, "reg":"BW 47 KG GP", "short":"Vehicle 2"},
-        {"id":3, "reg":"LR 93 VW GP", "short":"Vehicle 3"},
+        {"id": 1, "reg": "JM 45 CY GP", "short": "Vehicle 1"},
+        {"id": 2, "reg": "BW 47 KG GP", "short": "Vehicle 2"},
+        {"id": 3, "reg": "LR 93 VW GP", "short": "Vehicle 3"},
     ]
 
     tabs = st.tabs([f"{v['short']} ({v['reg']})" for v in vehicles])
@@ -141,26 +140,20 @@ with tab_fleet:
 
             c1, c2, c3 = st.columns([2, 2, 1.4])
 
-            # No key on markdown
             c1.markdown(f"**Location**  \n{status['location']}")
-            
+
             fuel_color = "green" if status["fuel"] > 50 else "orange" if status["fuel"] > 20 else "red"
             with c2:
-                # No key on markdown
                 c2.markdown(f"**Fuel**  \n<span style='color:{fuel_color}'>{status['fuel']}%</span>", unsafe_allow_html=True)
-                # Progress DOES support key
-                c2.progress(status["fuel"] / 100, key=f"fuel_prog_{vid}")
-                # No key on markdown
+                # Removed key= here — most common cause of this TypeError
+                c2.progress(status["fuel"] / 100)
                 c2.markdown(f"**Odometer**  \n{status['odo']:,} km")
 
             alert_cls = "status-good" if "None" in status["alerts"] else "status-warning" if "Low" in status["alerts"] else "status-alert"
-            # No key on markdown
             c3.markdown(f"**Last service**  \n{status['last_service']}")
-            # No key on markdown
             c3.markdown(f"**Alerts**  \n<span class='{alert_cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
 
-            # ────────────────────────────────
-            # Mileage chart – key IS allowed
+            # Mileage chart
             dates = [datetime.now().date() - timedelta(days=x) for x in range(13, -1, -1)]
             km = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]  # dummy
             df_m = pd.DataFrame({"Date": dates, "km": km})
@@ -168,8 +161,7 @@ with tab_fleet:
             fig.update_traces(line_color="#005c28")
             st.plotly_chart(fig, use_container_width=True, key=f"mileage_chart_{vid}")
 
-            # ────────────────────────────────
-            # Trips table – key IS allowed
+            # Trips table
             st.subheader("Recent trips")
             trips = pd.DataFrame({
                 "Date":      ["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"],
@@ -188,7 +180,10 @@ with tab_fleet:
 
             if not edited_trips.empty:
                 tot_km = edited_trips["Distance"].sum()
-                st.metric("Total distance (shown trips)", f"{tot_km:,} km", key=f"total_km_{vid}")# ────────────────────────────────────────────────
+                st.metric("Total distance (shown trips)", f"{tot_km:,} km", key=f"total_km_{vid}")
+
+
+
 # Footer
 # ────────────────────────────────────────────────
 st.markdown("---")
