@@ -39,7 +39,7 @@ st.image(
     use_column_width=False
 )
 st.markdown("""
-    <h1>Department of Justice and Constitutional Development</h1>
+    <h1>My Dashboard</h1>
     <h3>ACCESS TO JUSTICE FOR ALL</h3>
     <p>Internal Dashboard • Republic of South Africa 🇿🇦</p>
 """, unsafe_allow_html=True)
