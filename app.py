@@ -165,15 +165,20 @@ with tab_fleet:
                     cls = "status-alert"
                 st.markdown(f"**Alerts**  \n<span class='{cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
             
-            # Dummy mileage chart (last 14 days)
+            # Dummy mileage chart – now with UNIQUE KEY
             dates = [datetime.now().date() - timedelta(days=i) for i in range(13, -1, -1)]
-            mileage = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]
+            mileage = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]  # same dummy for now
             df_mileage = pd.DataFrame({"Date": dates, "Daily Mileage (km)": mileage})
             fig = px.line(df_mileage, x="Date", y="Daily Mileage (km)", title="Last 14 Days Mileage Trend")
             fig.update_traces(line_color="#005c28")
-            st.plotly_chart(fig, use_container_width=True)
             
-            # Recent trips (editable table)
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key=f"mileage_chart_{v_id}"   # ← THIS fixes the duplicate ID
+            )
+            
+            # Recent trips (also give unique key if you add more interactive elements later)
             st.subheader("Recent Trips & Logs")
             trips_data = pd.DataFrame({
                 "Date": ["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"],
@@ -185,7 +190,12 @@ with tab_fleet:
                 "Fuel Used (L)": [48.2, 47.5, 26.8, 34.1],
                 "Notes": ["", "Refuelled 40L", "", "Tyre pressure checked"]
             })
-            edited_trips = st.data_editor(trips_data, num_rows="dynamic", use_container_width=True)
+            edited_trips = st.data_editor(
+                trips_data,
+                num_rows="dynamic",
+                use_container_width=True,
+                key=f"trips_editor_{v_id}"   # ← optional but good practice
+            )
             
             if not edited_trips.empty:
                 total_km = edited_trips["Distance (km)"].sum()
