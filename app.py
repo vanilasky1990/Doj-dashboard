@@ -120,9 +120,6 @@ with tab_sundry:
     col1.metric("Total Spent", f"R {total_spent:,.2f}")
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
 
-# ────────────────────────────────────────────────
-# FLEET SERVICES tab
-# ────────────────────────────────────────────────
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
 
@@ -157,15 +154,21 @@ with tab_fleet:
             c3.markdown(f"**Last service**  \n{status['last_service']}")
             c3.markdown(f"**Alerts**  \n<span class='{alert_cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
 
-            # Mileage chart
+            # ────────────────────────────────────────────────
+            # Mileage chart – ADD UNIQUE KEY HERE
             dates = [datetime.now().date() - timedelta(days=x) for x in range(13, -1, -1)]
-            km_list = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]
+            km_list = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]  # dummy – same for all now
             df_mileage = pd.DataFrame({"Date": dates, "Daily km": km_list})
             fig = px.line(df_mileage, x="Date", y="Daily km", title="Last 14 days mileage")
             fig.update_traces(line_color="#005c28")
-            st.plotly_chart(fig, use_container_width=True, key="something_unique_here")
 
-            # Trips log
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                key=f"mileage_chart_vehicle_{vid}"   # ← This fixes the duplicate ID
+            )
+
+            # Trips log (add key here too for safety)
             st.subheader("Recent trips")
             trips_data = pd.DataFrame({
                 "Date":      ["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"],
@@ -175,8 +178,12 @@ with tab_fleet:
                 "End Odo":   [124950, 124850, 124400, 124150],
                 "Distance":  [350, 350, 200, 250],
             })
-            st.data_editor(trips_data, num_rows="dynamic", use_container_width=True)
-
+            st.data_editor(
+                trips_data,
+                num_rows="dynamic",
+                use_container_width=True,
+                key=f"trips_log_vehicle_{vid}"       # ← optional but recommended
+            )
 # ────────────────────────────────────────────────
 # Footer
 # ────────────────────────────────────────────────
