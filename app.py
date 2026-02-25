@@ -1,8 +1,24 @@
 import streamlit as st
-import pandas as pd
-import plotly.express as px
-from datetime import datetime, timedelta
-from typing import Dict
+import packaging.version
+
+def get_streamlit_version():
+    """Return current Streamlit version as packaging.version.Version object"""
+    return packaging.version.parse(st.__version__)
+
+# Optional: Check once at startup
+STREAMLIT_VERSION = get_streamlit_version()
+HAS_WIDGET_KEYS_ON_PROGRESS = STREAMLIT_VERSION >= packaging.version.parse("1.35.0")  # approximate – adjust if you know exact
+HAS_WIDGET_KEYS_ON_METRIC   = False  # From docs → still no key on metric even in 1.54
+
+# Then in your fleet loop, conditionally add key only where safe:
+# Example for progress (if you upgrade later):
+# if HAS_WIDGET_KEYS_ON_PROGRESS:
+#     c2.progress(status["fuel"] / 100, key=f"fuel_prog_{vid}")
+# else:
+c2.progress(status["fuel"] / 100)
+
+# For metric → always without key for now
+st.metric("Total distance (shown trips)", f"{tot_km:,} km") Dict
 
 # ────────────────────────────────────────────────
 # Page config
