@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from typing import Dict
 
 # ────────────────────────────────────────────────
@@ -69,7 +69,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 tab_home, tab_sundry, tab_fleet = st.tabs(["HOME", "SUNDRY", "FLEET SERVICES"])
 
 # ────────────────────────────────────────────────
-# HOME tab
+# HOME tab (unchanged)
 # ────────────────────────────────────────────────
 with tab_home:
     st.subheader("Witness Fees – Monthly Expenditure Overview")
@@ -96,7 +96,7 @@ with tab_home:
         st.info("Please switch to the **SUNDRY** tab above")
 
 # ────────────────────────────────────────────────
-# SUNDRY tab
+# SUNDRY tab (unchanged)
 # ────────────────────────────────────────────────
 with tab_sundry:
     st.subheader("Witness Fees Register")
@@ -121,11 +121,11 @@ with tab_sundry:
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
 
 # ────────────────────────────────────────────────
-# FLEET SERVICES tab – with slip adding forms
+# FLEET SERVICES tab – with Time column for tolls
 # ────────────────────────────────────────────────
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
-    st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips/logs.")
+    st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips/logs (multiple tolls per day supported).")
 
     vehicles = [
         {"id": 1, "reg": "JM 45 CY GP", "short": "Vehicle 1"},
@@ -141,21 +141,22 @@ with tab_fleet:
         reg = veh["reg"]
         status = get_vehicle_status(vid)
 
-        # Initialize session state for this vehicle's trip log if not exists
+        # Session state key for this vehicle's logs
         session_key = f"trips_vehicle_{vid}"
         if session_key not in st.session_state:
             st.session_state[session_key] = pd.DataFrame({
-                "Date": pd.to_datetime(["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"]),
-                "Driver": ["J. Smith", "A. Nkosi", "M. Botha", "S. Naidoo"],
-                "Purpose": ["Court appearance", "Site inspection", "Maintenance", "Vehicle transfer"],
-                "Start Odo": [124600, 124500, 124200, 123900],
-                "End Odo": [124950, 124850, 124400, 124150],
-                "Distance (km)": [350, 350, 200, 250],
-                "Fuel Added (L)": [0.0, 40.0, 0.0, 28.5],
-                "Fuel Cost (R)": [0.00, 880.00, 0.00, 627.00],
-                "Odo at Refuel": [0, 124520, 0, 124120],
-                "Toll Amount (R)": [45.00, 0.00, 120.00, 0.00],
-                "Toll Plaza / Notes": ["N3 Mariannhill", "", "N1 Huguenot", ""]
+                "Date": pd.to_datetime(["2026-02-20", "2026-02-20", "2026-02-20", "2026-02-20", "2026-02-15"]),
+                "Time": [time(8, 45), time(10, 15), time(13, 40), time(15, 20), None],
+                "Driver": ["J. Smith", "J. Smith", "J. Smith", "J. Smith", "A. Nkosi"],
+                "Purpose": ["Court transfer JHB-DBN", "Toll", "Toll", "Toll", "Site inspection"],
+                "Start Odo": [124600, 124700, 124820, 124900, 124500],
+                "End Odo": [124950, 124700, 124820, 124900, 124850],
+                "Distance (km)": [350, 0, 0, 0, 350],
+                "Fuel Added (L)": [0.0, 0.0, 0.0, 0.0, 40.0],
+                "Fuel Cost (R)": [0.00, 0.00, 0.00, 0.00, 880.00],
+                "Odo at Refuel": [0, 0, 0, 0, 124520],
+                "Toll Amount (R)": [0.00, 45.00, 28.50, 17.00, 0.00],
+                "Toll Plaza / Notes": ["", "N3 Mariannhill", "N3 Cedara", "N3 Westville", ""]
             })
 
         current_trips = st.session_state[session_key]
@@ -185,12 +186,19 @@ with tab_fleet:
             st.plotly_chart(fig, use_container_width=True, key=f"mileage_chart_vehicle_{vid}")
 
             # ────────────────────────────────────────────────
-            # Trips / Logs Table
+            # Trips / Logs Table – now with Time column
             # ────────────────────────────────────────────────
             st.subheader(f"Recent trips / logs – {reg}")
+            st.caption("Add multiple toll rows with the same date but different times when you have several tolls in one day.")
 
             column_config = {
                 "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD", required=True),
+                "Time": st.column_config.TimeColumn(
+                    "Time",
+                    format="HH:mm",
+                    step=60,  # 1-minute steps
+                    help="Approximate time of toll payment (leave blank for trips/refuelling)"
+                ),
                 "Driver": st.column_config.TextColumn("Driver", required=True),
                 "Purpose": st.column_config.TextColumn("Purpose"),
                 "Start Odo": st.column_config.NumberColumn("Start Odo", min_value=0, format="%d km"),
@@ -212,10 +220,10 @@ with tab_fleet:
                 key=f"trips_log_vehicle_{vid}"
             )
 
-            # Update session state after editing
+            # Save edited changes back to session state
             st.session_state[session_key] = edited_trips
 
-            # Summary
+            # Summary metrics
             if not edited_trips.empty:
                 total_distance = edited_trips["Distance (km)"].sum()
                 total_fuel_cost = edited_trips["Fuel Cost (R)"].sum()
@@ -227,7 +235,7 @@ with tab_fleet:
                 colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}")
 
             # ────────────────────────────────────────────────
-            # Add Fuel Slip
+            # Add Fuel Slip (unchanged)
             # ────────────────────────────────────────────────
             with st.expander("➕ Add Fuel Slip", expanded=False):
                 with st.form(key=f"add_fuel_form_{vid}"):
@@ -246,6 +254,7 @@ with tab_fleet:
                     if submitted_fuel:
                         new_row = pd.DataFrame([{
                             "Date": pd.to_datetime(fuel_date),
+                            "Time": None,
                             "Driver": "—",
                             "Purpose": "Refuelling",
                             "Start Odo": fuel_odo,
@@ -262,26 +271,32 @@ with tab_fleet:
                             [st.session_state[session_key], new_row],
                             ignore_index=True
                         )
-                        st.success("Fuel slip added successfully!")
+                        st.success("Fuel slip added!")
                         st.rerun()
 
             # ────────────────────────────────────────────────
-            # Add Toll Slip
+            # Add Toll Slip – now includes Time
             # ────────────────────────────────────────────────
             with st.expander("➕ Add Toll Slip", expanded=False):
+                st.caption("For multiple tolls on the same day → submit the form multiple times with different times.")
+                
                 with st.form(key=f"add_toll_form_{vid}"):
-                    col_date, col_amount = st.columns(2)
-                    toll_date = col_date.date_input("Toll payment date", value=datetime.now().date())
+                    col_date, col_time = st.columns(2)
+                    toll_date = col_date.date_input("Toll date", value=datetime.now().date())
+                    toll_time = col_time.time_input("Approximate toll time", value=time(8, 0), step=60)
+
+                    col_amount, _ = st.columns([1, 1])
                     toll_amount = col_amount.number_input("Toll amount (R)", min_value=0.0, step=1.0, format="%.2f")
 
                     toll_plaza = st.text_input("Toll plaza / Route", "")
-                    toll_notes = st.text_input("Additional notes / Invoice", "")
+                    toll_notes = st.text_input("Additional notes / Invoice nr", "")
 
                     submitted_toll = st.form_submit_button("Add Toll Slip", type="primary")
 
                     if submitted_toll:
                         new_row = pd.DataFrame([{
                             "Date": pd.to_datetime(toll_date),
+                            "Time": toll_time,
                             "Driver": "—",
                             "Purpose": "Toll payment",
                             "Start Odo": status["odo"],
@@ -298,7 +313,7 @@ with tab_fleet:
                             [st.session_state[session_key], new_row],
                             ignore_index=True
                         )
-                        st.success("Toll slip added successfully!")
+                        st.success("Toll slip added!")
                         st.rerun()
 
 # ────────────────────────────────────────────────
