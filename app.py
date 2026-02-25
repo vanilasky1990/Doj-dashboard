@@ -3,8 +3,11 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime, timedelta
+from typing import Dict
 
-# Page config
+# ────────────────────────────────────────────────
+# Page configuration
+# ────────────────────────────────────────────────
 st.set_page_config(
     page_title="MC Tsakane - Dashboard",
     page_icon="⚖️",
@@ -12,7 +15,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Clean CSS with DOJ&CD green scheme
+# ────────────────────────────────────────────────
+# Clean CSS with DOJ&CD green + yellow scheme
+# ────────────────────────────────────────────────
 st.markdown("""
     <style>
     .stApp { background-color: #f9fbfd; font-family: 'Helvetica Neue', Arial, sans-serif; }
@@ -32,23 +37,41 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# ────────────────────────────────────────────────
+# Vehicle status lookup function (MUST be at top level)
+# ────────────────────────────────────────────────
+def get_vehicle_status(vehicle_id: int) -> Dict[str, any]:
+    statuses = {
+        1: {"location": "JHB Magistrate Court", "fuel": 65, "odo": 124850, "last_service": "2025-11-15", "alerts": "None"},
+        2: {"location": "En Route to CPT", "fuel": 28, "odo": 98740, "last_service": "2025-10-20", "alerts": "Low Fuel Warning"},
+        3: {"location": "Parked - PE Office", "fuel": 92, "odo": 156320, "last_service": "2026-01-10", "alerts": "Service Due Soon"}
+    }
+    return statuses.get(vehicle_id, {"location": "Unknown", "fuel": 0, "odo": 0, "last_service": "N/A", "alerts": "N/A"})
+
+# ────────────────────────────────────────────────
 # Header with Logo
+# ────────────────────────────────────────────────
 st.markdown('<div class="header">', unsafe_allow_html=True)
 st.image(
     "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Coat_of_arms_of_South_Africa.svg/200px-Coat_of_arms_of_South_Africa.svg.png",
-    use_column_width=False
+    width=160
 )
-st.markdown("""
+current_year = datetime.now().year
+st.markdown(f"""
     <h1>My Dashboard</h1>
     <h3>ACCESS TO JUSTICE FOR ALL</h3>
-    <p>Internal Dashboard</p>
+    <p>Internal Dashboard • {current_year}</p>
 """, unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Main Tabs: HOME, SUNDRY, FLEET SERVICES
+# ────────────────────────────────────────────────
+# Main Tabs
+# ────────────────────────────────────────────────
 tab_home, tab_sundry, tab_fleet = st.tabs(["HOME", "SUNDRY", "FLEET SERVICES"])
 
-# HOME tab (unchanged - monthly chart)
+# ────────────────────────────────────────────────
+# HOME tab - Witness Fees Overview
+# ────────────────────────────────────────────────
 with tab_home:
     st.markdown("<h2 style='text-align: center; color: #005c28; margin-top: 30px;'>Witness Fees Expenditure Overview</h2>", unsafe_allow_html=True)
     
@@ -56,8 +79,15 @@ with tab_home:
     amounts = [45000, 62000, 38000, 75000, 51000, 89000, 42000, 67000, 93000, 55000, 48000, 72000]
     df_chart = pd.DataFrame({"Month": months, "Amount Spent (ZAR)": amounts})
     
-    fig = px.bar(df_chart, x="Month", y="Amount Spent (ZAR)", title="Monthly Witness Fees Expenditure (Current Year)",
-                 color="Amount Spent (ZAR)", color_continuous_scale="Greens", text_auto=True)
+    fig = px.bar(
+        df_chart,
+        x="Month",
+        y="Amount Spent (ZAR)",
+        title=f"Monthly Witness Fees Expenditure ({current_year})",
+        color="Amount Spent (ZAR)",
+        color_continuous_scale="Greens",
+        text_auto=True
+    )
     fig.update_layout(xaxis_title="Month", yaxis_title="Amount (ZAR)", showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
     
@@ -65,9 +95,12 @@ with tab_home:
     if st.button("Open Witness Fees Table (SUNDRY Section)"):
         st.success("Switch to the **SUNDRY** tab above.")
 
-# SUNDRY tab (witness fees table - unchanged)
+# ────────────────────────────────────────────────
+# SUNDRY tab - Witness Fees Table
+# ────────────────────────────────────────────────
 with tab_sundry:
     st.header("Witness Fees Table")
+    
     sample_data = {
         "Date": ["2026-01-15", "2026-01-22", "2026-02-05", "2026-02-10", "2026-02-18"],
         "Witness Name": ["A. Nkosi", "B. Mthembu", "C. van der Merwe", "D. Pillay", "E. Sithole"],
@@ -76,63 +109,72 @@ with tab_sundry:
         "Status": ["Paid", "Pending Approval", "Paid", "Awaiting Receipt", "Paid"],
         "Court/Office": ["Johannesburg Magistrate", "Cape Town High", "Durban Regional", "Johannesburg High", "Port Elizabeth Magistrate"]
     }
+    
     df_table = pd.DataFrame(sample_data)
     edited_df = st.data_editor(df_table, num_rows="dynamic", use_container_width=True)
+    
     total_spent = edited_df["Amount Paid (ZAR)"].sum()
-    st.metric("Total Spent (from table)", f"R {total_spent:,.2f}")
+    pending = edited_df[edited_df["Status"].isin(["Pending Approval", "Awaiting Receipt"])]["Amount Paid (ZAR)"].sum()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Total Spent (from table)", f"R {total_spent:,.2f}")
+    with col2:
+        st.metric("Pending / Awaiting", f"R {pending:,.2f}")
 
-# FLEET SERVICES tab with 3 vehicle sub-tabs
+# ────────────────────────────────────────────────
+# FLEET SERVICES tab with vehicle sub-tabs
+# ────────────────────────────────────────────────
 with tab_fleet:
     st.header("Fleet Services – Gauteng DOJ&CD")
-    st.markdown("Real-time vehicle tracking, fuel, service status & trip logging.")
-
+    st.markdown("Vehicle tracking, fuel, service status & trip logging.")
+    
     vehicle_list = [
         {"id": 1, "reg": "JM 45 CY GP", "name": "Vehicle 1"},
         {"id": 2, "reg": "BW 47 KG GP", "name": "Vehicle 2"},
         {"id": 3, "reg": "LR 93 VW GP", "name": "Vehicle 3"},
     ]
-
-    # Create sub-tabs dynamically
+    
     tab_names = [f"{v['name']} ({v['reg']})" for v in vehicle_list]
     vehicle_tabs = st.tabs(tab_names)
-
+    
     for idx, tab in enumerate(vehicle_tabs):
         vehicle = vehicle_list[idx]
         v_id = vehicle["id"]
         status = get_vehicle_status(v_id)
-
+        
         with tab:
             st.subheader(f"{vehicle['name']}: {vehicle['reg']}")
-
-            # Status cards in columns
-            col1, col2, col3 = st.columns([2, 2, 1.2])
+            
+            # Status overview in columns
+            col1, col2, col3 = st.columns([2, 2, 1.5])
             with col1:
                 st.markdown(f"**📍 Current Location**  \n{status['location']}")
             with col2:
-                fuel_color = "green" if status['fuel'] > 50 else "orange" if status['fuel'] > 20 else "red"
+                fuel_color = "green" if status["fuel"] > 50 else "orange" if status["fuel"] > 20 else "red"
                 st.markdown(f"**⛽ Fuel Level**  \n<span style='color:{fuel_color};font-weight:bold;'>{status['fuel']}%</span>", unsafe_allow_html=True)
+                st.progress(status["fuel"] / 100)
                 st.markdown(f"**🛣 Odometer**  \n{status['odo']:,} km")
             with col3:
                 st.markdown(f"**🛠 Last Service**  \n{status['last_service']}")
-                if "None" in status['alerts']:
+                if "None" in status["alerts"]:
                     cls = "status-good"
-                elif "Low" in status['alerts']:
+                elif "Low" in status["alerts"] or "Warning" in status["alerts"]:
                     cls = "status-warning"
                 else:
                     cls = "status-alert"
                 st.markdown(f"**Alerts**  \n<span class='{cls}'>{status['alerts']}</span>", unsafe_allow_html=True)
-
-            # Mileage chart (you can later parameterize per vehicle)
-            dates = [datetime.now().date() - timedelta(days=i) for i in range(13, -1, -1)]   # last 14 days example
-            mileage = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]              # dummy – replace with real data
-            df_mileage = pd.DataFrame({"Date": dates, "Daily Mileage (km)": mileage[-len(dates):]})
+            
+            # Dummy mileage chart (last 14 days)
+            dates = [datetime.now().date() - timedelta(days=i) for i in range(13, -1, -1)]
+            mileage = [45, 0, 120, 85, 0, 60, 30, 95, 110, 20, 75, 0, 55, 140]
+            df_mileage = pd.DataFrame({"Date": dates, "Daily Mileage (km)": mileage})
             fig = px.line(df_mileage, x="Date", y="Daily Mileage (km)", title="Last 14 Days Mileage Trend")
-            fig.update_traces(line_color='#005c28')
+            fig.update_traces(line_color="#005c28")
             st.plotly_chart(fig, use_container_width=True)
-
-            # Recent trips (per vehicle – in real app load from DB/CSV)
+            
+            # Recent trips (editable table)
             st.subheader("Recent Trips & Logs")
-            # Example – customize per vehicle later
             trips_data = pd.DataFrame({
                 "Date": ["2026-02-20", "2026-02-15", "2026-02-10", "2026-02-05"],
                 "Driver": ["J. Smith", "A. Nkosi", "M. Botha", "S. Naidoo"],
@@ -144,11 +186,13 @@ with tab_fleet:
                 "Notes": ["", "Refuelled 40L", "", "Tyre pressure checked"]
             })
             edited_trips = st.data_editor(trips_data, num_rows="dynamic", use_container_width=True)
-
-            # Quick stats from edited table
+            
             if not edited_trips.empty:
                 total_km = edited_trips["Distance (km)"].sum()
                 st.metric("Total Distance (recent trips)", f"{total_km:,} km")
+
+# ────────────────────────────────────────────────
 # Footer
+# ────────────────────────────────────────────────
 st.markdown("---")
-st.caption("© Department of Justice and Constitutional Development • 2026")
+st.caption(f"© Department of Justice and Constitutional Development • {current_year}")
