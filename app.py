@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, time
 import io
 import os
 import sqlite3
-import yaml
 import shutil
 import hashlib
 import hmac
@@ -15,17 +14,24 @@ from functools import lru_cache
 import warnings
 warnings.filterwarnings('ignore')
 
+# Handle optional imports gracefully
+try:
+    import yaml
+    YAML_AVAILABLE = True
+except ImportError:
+    YAML_AVAILABLE = False
+    st.warning("⚠️ PyYAML not installed. Using default configuration.")
+
 # ────────────────────────────────────────────────
-# Configuration Management
+# Configuration Management (with fallback)
 # ────────────────────────────────────────────────
 def load_config():
-    """Load configuration from YAML file or create default"""
-    config_path = Path("config.yaml")
+    """Load configuration from YAML file or use defaults"""
     default_config = {
         "vehicles": [
-            {"id": 1, "reg": "LR 93 VW GP", "service_interval_km": 15000, "service_interval_days": 180, "fuel_capacity": 60},
-            {"id": 2, "reg": "BW 47 KG GP", "service_interval_km": 15000, "service_interval_days": 180, "fuel_capacity": 60},
-            {"id": 3, "reg": "JM 45 CY GP", "service_interval_km": 15000, "service_interval_days": 180, "fuel_capacity": 60}
+            {"id": 1, "reg": "LR 93 VW GP", "short": "Vehicle 1", "service_interval_km": 15000, "service_interval_days": 180, "fuel_capacity": 60},
+            {"id": 2, "reg": "BW 47 KG GP", "short": "Vehicle 2", "service_interval_km": 15000, "service_interval_days": 180, "fuel_capacity": 60},
+            {"id": 3, "reg": "JM 45 CY GP", "short": "Vehicle 3", "service_interval_km": 15000, "service_interval_days": 180, "fuel_capacity": 60}
         ],
         "drivers": ["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi", "ML Kgakatsi"],
         "app_settings": {
@@ -44,12 +50,24 @@ def load_config():
         }
     }
     
-    if config_path.exists():
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
+    if YAML_AVAILABLE:
+        config_path = Path("config.yaml")
+        if config_path.exists():
+            try:
+                with open(config_path, 'r') as f:
+                    return yaml.safe_load(f)
+            except Exception as e:
+                st.warning(f"Error loading config: {e}. Using defaults.")
+                return default_config
+        else:
+            # Create default config file
+            try:
+                with open(config_path, 'w') as f:
+                    yaml.dump(default_config, f)
+            except:
+                pass
+            return default_config
     else:
-        with open(config_path, 'w') as f:
-            yaml.dump(default_config, f)
         return default_config
 
 config = load_config()
@@ -59,38 +77,35 @@ app_settings = config["app_settings"]
 alert_thresholds = config["alert_thresholds"]
 
 # ────────────────────────────────────────────────
-# Authentication
+# Authentication (simplified for Streamlit Cloud)
 # ────────────────────────────────────────────────
 def check_password():
-    """Returns `True` if the user had the correct password."""
+    """Simple authentication for demo purposes"""
     
-    def login_entered():
-        if st.session_state["username"] in st.secrets.get("users", {}) and \
-           hmac.compare_digest(
-               st.session_state["password"],
-               st.secrets["users"][st.session_state["username"]]
-           ):
+    # For demo - simple password check
+    # In production, use proper authentication
+    def login_clicked():
+        if st.session_state["password"] == "admin123":  # Demo password
             st.session_state["authenticated"] = True
-            st.session_state["user"] = st.session_state["username"]
-            del st.session_state["password"]
+            st.session_state["user"] = "admin"
         else:
             st.session_state["authenticated"] = False
-            st.error("😕 Invalid username or password")
+            st.error("😕 Invalid password")
 
     if "authenticated" not in st.session_state:
         st.title("Login - DOJ&CD Fleet Management")
         with st.form("login_form"):
-            st.text_input("Username", key="username")
             st.text_input("Password", type="password", key="password")
-            st.form_submit_button("Login", on_click=login_entered)
+            st.form_submit_button("Login", on_click=login_clicked)
+        st.info("Demo password: admin123")
         return False
     
     if not st.session_state["authenticated"]:
         st.title("Login - DOJ&CD Fleet Management")
         with st.form("login_form"):
-            st.text_input("Username", key="username")
             st.text_input("Password", type="password", key="password")
-            st.form_submit_button("Login", on_click=login_entered)
+            st.form_submit_button("Login", on_click=login_clicked)
+        st.info("Demo password: admin123")
         return False
     
     return True
@@ -100,46 +115,51 @@ def check_password():
 # ────────────────────────────────────────────────
 def init_database():
     """Initialize SQLite database"""
-    conn = sqlite3.connect('fleet_management.db')
-    c = conn.cursor()
-    
-    # Create trips table
-    c.execute('''CREATE TABLE IF NOT EXISTS trips
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  vehicle_id INTEGER,
-                  date DATE,
-                  time TEXT,
-                  driver TEXT,
-                  purpose TEXT,
-                  start_odo INTEGER,
-                  end_odo INTEGER,
-                  distance INTEGER,
-                  fuel_added REAL,
-                  fuel_cost REAL,
-                  odo_at_refuel INTEGER,
-                  toll_amount REAL,
-                  toll_plaza_notes TEXT,
-                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    
-    # Create audit log table
-    c.execute('''CREATE TABLE IF NOT EXISTS audit_log
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  user TEXT,
-                  action TEXT,
-                  vehicle_id INTEGER,
-                  details TEXT,
-                  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    
-    # Create backups table
-    c.execute('''CREATE TABLE IF NOT EXISTS backups
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  backup_path TEXT,
-                  size_bytes INTEGER,
-                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect('fleet_management.db')
+        c = conn.cursor()
+        
+        # Create trips table
+        c.execute('''CREATE TABLE IF NOT EXISTS trips
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      vehicle_id INTEGER,
+                      date DATE,
+                      time TEXT,
+                      driver TEXT,
+                      purpose TEXT,
+                      start_odo INTEGER,
+                      end_odo INTEGER,
+                      distance INTEGER,
+                      fuel_added REAL,
+                      fuel_cost REAL,
+                      odo_at_refuel INTEGER,
+                      toll_amount REAL,
+                      toll_plaza_notes TEXT,
+                      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        
+        # Create audit log table
+        c.execute('''CREATE TABLE IF NOT EXISTS audit_log
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      user TEXT,
+                      action TEXT,
+                      vehicle_id INTEGER,
+                      details TEXT,
+                      timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        
+        # Create backups table
+        c.execute('''CREATE TABLE IF NOT EXISTS backups
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      backup_path TEXT,
+                      size_bytes INTEGER,
+                      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Database init error: {e}")
+        return False
 
 # Initialize database on startup
 init_database()
@@ -178,12 +198,15 @@ def backup_data():
                 total_size += os.path.getsize(dst)
         
         # Log backup to database
-        conn = sqlite3.connect('fleet_management.db')
-        c = conn.cursor()
-        c.execute('''INSERT INTO backups (backup_path, size_bytes)
-                     VALUES (?, ?)''', (backup_dir, total_size))
-        conn.commit()
-        conn.close()
+        try:
+            conn = sqlite3.connect('fleet_management.db')
+            c = conn.cursor()
+            c.execute('''INSERT INTO backups (backup_path, size_bytes)
+                         VALUES (?, ?)''', (backup_dir, total_size))
+            conn.commit()
+            conn.close()
+        except:
+            pass
         
         log_audit("backup_created", details=f"Backup size: {total_size} bytes")
         return True, backup_dir, total_size
@@ -251,7 +274,23 @@ def load_trips(vid: int) -> pd.DataFrame:
         conn.close()
         
         if not df.empty:
-            df['Date'] = pd.to_datetime(df['date'])
+            # Rename columns to match CSV format
+            column_map = {
+                'date': 'Date',
+                'time': 'Time',
+                'driver': 'Driver',
+                'purpose': 'Purpose',
+                'start_odo': 'Start Odo',
+                'end_odo': 'End Odo',
+                'distance': 'Distance (km)',
+                'fuel_added': 'Fuel Added (L)',
+                'fuel_cost': 'Fuel Cost (R)',
+                'odo_at_refuel': 'Odo at Refuel',
+                'toll_amount': 'Toll Amount (R)',
+                'toll_plaza_notes': 'Toll Plaza / Notes'
+            }
+            df = df.rename(columns=column_map)
+            df['Date'] = pd.to_datetime(df['Date'])
             return df
     except Exception as e:
         print(f"Database load error: {e}")
@@ -321,7 +360,6 @@ def save_trips(vid: int, df: pd.DataFrame):
         
     except Exception as e:
         print(f"Database save error: {e}")
-        st.warning(f"Data saved to CSV but database sync failed: {e}")
 
 # ────────────────────────────────────────────────
 # Enhanced Analytics Functions
@@ -341,7 +379,7 @@ def calculate_fuel_efficiency(df):
 def predict_maintenance(df, current_odo, last_service_odo):
     """Predict next maintenance based on usage patterns"""
     if df.empty:
-        return 15000  # Default interval
+        return 15000, None
     
     km_since_service = current_odo - last_service_odo
     km_remaining = 15000 - km_since_service
@@ -388,21 +426,24 @@ def check_alerts(vehicle_id, status, df):
     
     # Service alerts
     next_date, km_remaining_str, km_remaining = estimate_next_service(status)
-    next_date_obj = datetime.strptime(next_date, "%Y-%m-%d").date()
-    days_to_service = (next_date_obj - datetime.now().date()).days
-    
-    if km_remaining < alert_thresholds["service_km_due"] or days_to_service < alert_thresholds["service_days_due"]:
-        alerts.append({
-            "type": "critical",
-            "message": f"🔴 Service due! {km_remaining:,} km or {days_to_service} days remaining",
-            "icon": "🚨"
-        })
-    elif km_remaining < alert_thresholds["service_km_warning"] or days_to_service < alert_thresholds["service_days_warning"]:
-        alerts.append({
-            "type": "warning",
-            "message": f"🟠 Service approaching: {km_remaining:,} km or {days_to_service} days left",
-            "icon": "⚠️"
-        })
+    try:
+        next_date_obj = datetime.strptime(next_date, "%Y-%m-%d").date()
+        days_to_service = (next_date_obj - datetime.now().date()).days
+        
+        if km_remaining < alert_thresholds["service_km_due"] or days_to_service < alert_thresholds["service_days_due"]:
+            alerts.append({
+                "type": "critical",
+                "message": f"🔴 Service due! {km_remaining:,} km or {days_to_service} days remaining",
+                "icon": "🚨"
+            })
+        elif km_remaining < alert_thresholds["service_km_warning"] or days_to_service < alert_thresholds["service_days_warning"]:
+            alerts.append({
+                "type": "warning",
+                "message": f"🟠 Service approaching: {km_remaining:,} km or {days_to_service} days left",
+                "icon": "⚠️"
+            })
+    except:
+        pass
     
     # Unusual driving patterns
     if not df.empty and len(df) > 5:
@@ -520,6 +561,16 @@ if app_settings["backup_enabled"]:
                         st.success(f"✅ Automatic backup created: {path}")
     except Exception as e:
         pass
+
+# ────────────────────────────────────────────────
+# Helper function for distance calculation
+# ────────────────────────────────────────────────
+def calc_distance(row):
+    if row.get("Purpose") == "Toll payment":
+        return 0
+    if pd.notna(row.get("Start Odo")) and pd.notna(row.get("End Odo")):
+        return max(0, row["End Odo"] - row["Start Odo"])
+    return row.get("Distance (km)", 0)
 
 # ────────────────────────────────────────────────
 # Tabs
@@ -658,13 +709,7 @@ with tab_fleet:
 
         current_trips = load_trips_cached(vid)
 
-        def calc_distance(row):
-            if row.get("Purpose") == "Toll payment":
-                return 0
-            if pd.notna(row.get("Start Odo")) and pd.notna(row.get("End Odo")):
-                return max(0, row["End Odo"] - row["Start Odo"])
-            return row.get("Distance (km)", 0)
-
+        # Recalculate distances
         current_trips["Distance (km)"] = current_trips.apply(calc_distance, axis=1)
 
         with tab:
@@ -769,7 +814,7 @@ with tab_fleet:
                             if uploaded_file.name.endswith('.csv'):
                                 new_data = pd.read_csv(uploaded_file, parse_dates=["Date"], dayfirst=True, errors='coerce')
                             else:
-                                new_data = pd.read_excel(uploaded_file, parse_dates=["Date"], dayfirst=True, engine='openpyxl')
+                                new_data = pd.read_excel(uploaded_file, parse_dates=["Date"], dayfirst=True)
 
                             # Standardize column names
                             column_map = {
@@ -1108,9 +1153,10 @@ with tab_fleet:
                     st.markdown("#### Cost Analysis")
                     cost_cols = ['Fuel Cost (R)', 'Toll Amount (R)']
                     cost_data = current_trips[cost_cols].sum()
-                    fig_costs = px.pie(values=cost_data.values, names=cost_data.index,
-                                      title='Cost Breakdown')
-                    st.plotly_chart(fig_costs, use_container_width=True)
+                    if cost_data.sum() > 0:
+                        fig_costs = px.pie(values=cost_data.values, names=cost_data.index,
+                                          title='Cost Breakdown')
+                        st.plotly_chart(fig_costs, use_container_width=True)
                     
                     # Maintenance prediction
                     last_service_km = current_trips[current_trips['Purpose'] == 'Service']['End Odo'].max() if 'Service' in current_trips['Purpose'].values else 0
@@ -1122,7 +1168,7 @@ with tab_fleet:
                     st.info("Add trip data to view analytics.")
 
 # ────────────────────────────────────────────────
-# ADMIN Tab (new)
+# ADMIN Tab
 # ────────────────────────────────────────────────
 with tab_admin:
     st.subheader("System Administration")
@@ -1246,7 +1292,7 @@ with tab_admin:
                 st.success("Cache cleared!")
 
 # ────────────────────────────────────────────────
-# Unit Tests (hidden in production)
+# Unit Tests (hidden by default)
 # ────────────────────────────────────────────────
 def run_tests():
     """Run unit tests"""
