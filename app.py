@@ -262,7 +262,7 @@ with tab_fleet:
                 }
 
                 # ────────────────────────────────────────────────
-                # IMPORT DATA FEATURE (Option 1)
+                # IMPORT DATA FEATURE
                 # ────────────────────────────────────────────────
                 with st.expander("📤 Import trips from CSV or Excel", expanded=False):
                     st.info("""
@@ -279,7 +279,8 @@ with tab_fleet:
                         "Choose a CSV or Excel file",
                         type=["csv", "xlsx", "xls"],
                         accept_multiple_files=False,
-                        help="Upload your trip log file. New rows will be appended."
+                        help="Upload your trip log file. New rows will be appended.",
+                        key=f"import_uploader_vehicle_{vid}"  # ← FIXED: unique per vehicle
                     )
 
                     if uploaded_file is not None:
@@ -289,7 +290,7 @@ with tab_fleet:
                             else:
                                 new_data = pd.read_excel(uploaded_file, parse_dates=["Date"], dayfirst=True, engine='openpyxl')
 
-                            # Standardize column names (forgiving matching)
+                            # Standardize column names
                             column_map = {
                                 "date": "Date", "trip date": "Date", "date of trip": "Date",
                                 "driver": "Driver", "name": "Driver",
@@ -306,20 +307,17 @@ with tab_fleet:
                             new_data.columns = new_data.columns.str.lower().str.strip()
                             new_data = new_data.rename(columns=column_map)
 
-                            # Keep only known columns
                             known_cols = load_trips(vid).columns
                             new_data = new_data[[c for c in new_data.columns if c in known_cols]]
 
                             if not new_data.empty:
-                                # Append and recalculate distance
                                 current_trips = pd.concat([current_trips, new_data], ignore_index=True)
                                 current_trips["Distance (km)"] = current_trips.apply(calc_distance, axis=1)
                                 save_trips(vid, current_trips)
-
                                 st.success(f"Imported {len(new_data)} rows successfully! Data saved.")
                                 st.rerun()
                             else:
-                                st.warning("No valid data columns found in the file. Check column names.")
+                                st.warning("No valid data columns found in the file.")
 
                         except Exception as e:
                             st.error(f"Error reading file: {str(e)}")
@@ -343,7 +341,7 @@ with tab_fleet:
                         value=1,
                         step=1,
                         format="%d",
-                        key=f"page_selector_{vid}"
+                        key=f"page_selector_{vid}_{idx}"  # ← unique
                     )
 
                 start_idx = (page - 1) * rows_per_page
@@ -357,7 +355,7 @@ with tab_fleet:
                     num_rows="dynamic",
                     use_container_width=True,
                     hide_index=True,
-                    key=f"trips_editor_page_{vid}_{page}"
+                    key=f"trips_editor_page_{vid}_{page}_{idx}"  # ← unique
                 )
 
                 # Safe update + save
@@ -369,7 +367,7 @@ with tab_fleet:
                     save_trips(vid, current_trips)
 
                 st.caption(f"Showing rows {start_idx+1}–{end_idx} of {total_rows}")
-                st.metric("Total log entries", total_rows)
+                st.metric("Total log entries", total_rows, key=f"metric_entries_{vid}")
 
                 if total_rows > 0:
                     total_distance = current_trips["Distance (km)"].sum()
@@ -377,22 +375,22 @@ with tab_fleet:
                     total_tolls = current_trips["Toll Amount (R)"].sum()
 
                     colA, colB, colC = st.columns(3)
-                    colA.metric("Total Distance", f"{total_distance:,} km")
-                    colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}")
-                    colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}")
+                    colA.metric("Total Distance", f"{total_distance:,} km", key=f"metric_dist_{vid}")
+                    colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}", key=f"metric_fuel_{vid}")
+                    colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}", key=f"metric_tolls_{vid}")
 
                 # Add Trip
                 with st.expander("➕ Add Trip", expanded=False):
                     with st.form(key=f"add_trip_form_{vid}"):
                         col_date, col_driver = st.columns(2)
-                        trip_date = col_date.date_input("Trip date", value=datetime.now().date())
-                        driver = col_driver.selectbox("Driver", options=drivers_list)
+                        trip_date = col_date.date_input("Trip date", value=datetime.now().date(), key=f"trip_date_{vid}")
+                        driver = col_driver.selectbox("Driver", options=drivers_list, key=f"trip_driver_{vid}")
 
                         col_start, col_end = st.columns(2)
-                        start_odo = col_start.number_input("Start Odometer (km)", min_value=0, step=1)
-                        end_odo = col_end.number_input("End Odometer (km)", min_value=0, step=1)
+                        start_odo = col_start.number_input("Start Odometer (km)", min_value=0, step=1, key=f"trip_start_odo_{vid}")
+                        end_odo = col_end.number_input("End Odometer (km)", min_value=0, step=1, key=f"trip_end_odo_{vid}")
 
-                        purpose = st.text_input("Purpose of trip", "")
+                        purpose = st.text_input("Purpose of trip", key=f"trip_purpose_{vid}")
 
                         if st.form_submit_button("Add Trip", type="primary"):
                             distance = max(0, end_odo - start_odo) if end_odo >= start_odo else 0
@@ -425,17 +423,17 @@ with tab_fleet:
                 with st.expander("➕ Add Fuel Slip", expanded=False):
                     with st.form(key=f"add_fuel_form_{vid}"):
                         col_date, col_odo = st.columns(2)
-                        fuel_date = col_date.date_input("Refuelling date", value=datetime.now().date())
-                        fuel_odo = col_odo.number_input("Odometer at refuel (km)", min_value=0, value=status["odo"], step=1)
+                        fuel_date = col_date.date_input("Refuelling date", value=datetime.now().date(), key=f"fuel_date_{vid}")
+                        fuel_odo = col_odo.number_input("Odometer at refuel (km)", min_value=0, value=status["odo"], step=1, key=f"fuel_odo_{vid}")
 
                         col_driver, col_litres = st.columns(2)
                         driver = col_driver.selectbox("Driver", options=drivers_list, key=f"fuel_driver_{vid}")
-                        fuel_litres = col_litres.number_input("Litres added", min_value=0.0, step=0.1, format="%.1f")
+                        fuel_litres = col_litres.number_input("Litres added", min_value=0.0, step=0.1, format="%.1f", key=f"fuel_litres_{vid}")
 
                         col_cost, _ = st.columns([1, 1])
-                        fuel_cost = col_cost.number_input("Total fuel cost (R)", min_value=0.0, step=1.0, format="%.2f")
+                        fuel_cost = col_cost.number_input("Total fuel cost (R)", min_value=0.0, step=1.0, format="%.2f", key=f"fuel_cost_{vid}")
 
-                        fuel_notes = st.text_input("Fuel station / Notes", "")
+                        fuel_notes = st.text_input("Fuel station / Notes", key=f"fuel_notes_{vid}")
 
                         if st.form_submit_button("Add Fuel Slip", type="primary"):
                             new_row = pd.DataFrame([{
@@ -465,15 +463,15 @@ with tab_fleet:
                     
                     with st.form(key=f"add_toll_form_{vid}"):
                         col_date, col_time = st.columns(2)
-                        toll_date = col_date.date_input("Toll date", value=datetime.now().date())
-                        toll_time = col_time.time_input("Approximate toll time", value=time(8, 0), step=60)
+                        toll_date = col_date.date_input("Toll date", value=datetime.now().date(), key=f"toll_date_{vid}")
+                        toll_time = col_time.time_input("Approximate toll time", value=time(8, 0), step=60, key=f"toll_time_{vid}")
 
                         col_driver, col_amount = st.columns(2)
                         driver = col_driver.selectbox("Driver", options=drivers_list, key=f"toll_driver_{vid}")
-                        toll_amount = col_amount.number_input("Toll amount (R)", min_value=0.0, step=1.0, format="%.2f")
+                        toll_amount = col_amount.number_input("Toll amount (R)", min_value=0.0, step=1.0, format="%.2f", key=f"toll_amount_{vid}")
 
-                        toll_plaza = st.text_input("Toll plaza / Route", "")
-                        toll_notes = st.text_input("Additional notes / Invoice nr", "")
+                        toll_plaza = st.text_input("Toll plaza / Route", key=f"toll_plaza_{vid}")
+                        toll_notes = st.text_input("Additional notes / Invoice nr", key=f"toll_notes_{vid}")
 
                         if st.form_submit_button("Add Toll Slip", type="primary"):
                             new_row = pd.DataFrame([{
