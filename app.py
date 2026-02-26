@@ -280,7 +280,7 @@ with tab_fleet:
                         type=["csv", "xlsx", "xls"],
                         accept_multiple_files=False,
                         help="Upload your trip log file. New rows will be appended.",
-                        key=f"import_uploader_vehicle_{vid}"  # ← FIXED: unique per vehicle
+                        key=f"import_uploader_vehicle_{vid}"
                     )
 
                     if uploaded_file is not None:
@@ -341,7 +341,7 @@ with tab_fleet:
                         value=1,
                         step=1,
                         format="%d",
-                        key=f"page_selector_{vid}_{idx}"  # ← unique
+                        key=f"page_selector_{vid}"
                     )
 
                 start_idx = (page - 1) * rows_per_page
@@ -355,7 +355,7 @@ with tab_fleet:
                     num_rows="dynamic",
                     use_container_width=True,
                     hide_index=True,
-                    key=f"trips_editor_page_{vid}_{page}_{idx}"  # ← unique
+                    key=f"trips_editor_page_{vid}_{page}"
                 )
 
                 # Safe update + save
@@ -542,7 +542,7 @@ with tab_fleet:
                         data=csv_data,
                         file_name=f"Trips_{reg.replace(' ', '_')}_{selected_month_str}.csv",
                         mime="text/csv",
-                        key=f"csv_{vid}_{selected_month_str}"
+                        key=f"csv_download_{vid}_{selected_month_str}"
                     )
 
                     # Excel export
@@ -558,7 +558,7 @@ with tab_fleet:
                         data=excel_buffer,
                         file_name=f"Monthly_Report_{reg.replace(' ', '_')}_{selected_month_str}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key=f"excel_{vid}_{selected_month_str}"
+                        key=f"excel_download_{vid}_{selected_month_str}"
                     )
 
                 else:
