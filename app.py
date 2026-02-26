@@ -4,42 +4,265 @@ import plotly.express as px
 from datetime import datetime, timedelta, time
 import io
 import os
+import sqlite3
+import yaml
+import shutil
+import hashlib
+import hmac
+from pathlib import Path
+import time as time_module
+from functools import lru_cache
+import warnings
+warnings.filterwarnings('ignore')
 
 # ────────────────────────────────────────────────
-# Page config & mobile/PWA support
+# Configuration Management
 # ────────────────────────────────────────────────
-st.set_page_config(
-    page_title="DOJ&CD - MC Tsakane Dashboard",
-    page_icon="⚖️",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
-
-# Mobile viewport + larger touch targets
-st.markdown("""
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <style>
-        .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
-        button, .stButton>button { min-height: 48px; font-size: 16px; padding: 12px; min-width: 120px; }
-        input, .stTextInput>div>div>input, .stNumberInput>div>div>input { font-size: 16px; }
-        .stSelectbox>div>div>div, .stExpander { font-size: 16px; }
-        /* Green expander title on success */
-        .stExpander:has(.stSuccess) > div > div > div:first-child {
-            color: #006400 !important;
-            font-weight: bold !important;
+def load_config():
+    """Load configuration from YAML file or create default"""
+    config_path = Path("config.yaml")
+    default_config = {
+        "vehicles": [
+            {"id": 1, "reg": "LR 93 VW GP", "service_interval_km": 15000, "service_interval_days": 180, "fuel_capacity": 60},
+            {"id": 2, "reg": "BW 47 KG GP", "service_interval_km": 15000, "service_interval_days": 180, "fuel_capacity": 60},
+            {"id": 3, "reg": "JM 45 CY GP", "service_interval_km": 15000, "service_interval_days": 180, "fuel_capacity": 60}
+        ],
+        "drivers": ["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi", "ML Kgakatsi"],
+        "app_settings": {
+            "app_name": "DOJ&CD - MC Tsakane Dashboard",
+            "rows_per_page": 20,
+            "max_daily_distance": 2000,
+            "backup_enabled": True,
+            "backup_interval_days": 7
+        },
+        "alert_thresholds": {
+            "fuel_low": 20,
+            "service_km_warning": 5000,
+            "service_days_warning": 90,
+            "service_km_due": 2000,
+            "service_days_due": 30
         }
-    </style>
-""", unsafe_allow_html=True)
+    }
+    
+    if config_path.exists():
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+    else:
+        with open(config_path, 'w') as f:
+            yaml.dump(default_config, f)
+        return default_config
+
+config = load_config()
+vehicles = config["vehicles"]
+drivers_list = config["drivers"]
+app_settings = config["app_settings"]
+alert_thresholds = config["alert_thresholds"]
 
 # ────────────────────────────────────────────────
-# CSV persistence functions
+# Authentication
 # ────────────────────────────────────────────────
+def check_password():
+    """Returns `True` if the user had the correct password."""
+    
+    def login_entered():
+        if st.session_state["username"] in st.secrets.get("users", {}) and \
+           hmac.compare_digest(
+               st.session_state["password"],
+               st.secrets["users"][st.session_state["username"]]
+           ):
+            st.session_state["authenticated"] = True
+            st.session_state["user"] = st.session_state["username"]
+            del st.session_state["password"]
+        else:
+            st.session_state["authenticated"] = False
+            st.error("😕 Invalid username or password")
+
+    if "authenticated" not in st.session_state:
+        st.title("Login - DOJ&CD Fleet Management")
+        with st.form("login_form"):
+            st.text_input("Username", key="username")
+            st.text_input("Password", type="password", key="password")
+            st.form_submit_button("Login", on_click=login_entered)
+        return False
+    
+    if not st.session_state["authenticated"]:
+        st.title("Login - DOJ&CD Fleet Management")
+        with st.form("login_form"):
+            st.text_input("Username", key="username")
+            st.text_input("Password", type="password", key="password")
+            st.form_submit_button("Login", on_click=login_entered)
+        return False
+    
+    return True
+
+# ────────────────────────────────────────────────
+# Database Integration
+# ────────────────────────────────────────────────
+def init_database():
+    """Initialize SQLite database"""
+    conn = sqlite3.connect('fleet_management.db')
+    c = conn.cursor()
+    
+    # Create trips table
+    c.execute('''CREATE TABLE IF NOT EXISTS trips
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  vehicle_id INTEGER,
+                  date DATE,
+                  time TEXT,
+                  driver TEXT,
+                  purpose TEXT,
+                  start_odo INTEGER,
+                  end_odo INTEGER,
+                  distance INTEGER,
+                  fuel_added REAL,
+                  fuel_cost REAL,
+                  odo_at_refuel INTEGER,
+                  toll_amount REAL,
+                  toll_plaza_notes TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # Create audit log table
+    c.execute('''CREATE TABLE IF NOT EXISTS audit_log
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user TEXT,
+                  action TEXT,
+                  vehicle_id INTEGER,
+                  details TEXT,
+                  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # Create backups table
+    c.execute('''CREATE TABLE IF NOT EXISTS backups
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  backup_path TEXT,
+                  size_bytes INTEGER,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    
+    conn.commit()
+    conn.close()
+
+# Initialize database on startup
+init_database()
+
+# ────────────────────────────────────────────────
+# Audit Logging
+# ────────────────────────────────────────────────
+def log_audit(action, vehicle_id=None, details=None):
+    """Log user actions for audit trail"""
+    try:
+        conn = sqlite3.connect('fleet_management.db')
+        c = conn.cursor()
+        user = st.session_state.get("user", "unknown")
+        c.execute('''INSERT INTO audit_log (user, action, vehicle_id, details)
+                     VALUES (?, ?, ?, ?)''', (user, action, vehicle_id, details))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Audit log error: {e}")
+
+# ────────────────────────────────────────────────
+# Data Backup
+# ────────────────────────────────────────────────
+def backup_data():
+    """Create backup of all CSV files"""
+    try:
+        backup_dir = f"backups/{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        os.makedirs(backup_dir, exist_ok=True)
+        total_size = 0
+        
+        for vid in range(1, 4):
+            src = f"trips_vehicle_{vid}.csv"
+            if os.path.exists(src):
+                dst = f"{backup_dir}/trips_vehicle_{vid}.csv"
+                shutil.copy2(src, dst)
+                total_size += os.path.getsize(dst)
+        
+        # Log backup to database
+        conn = sqlite3.connect('fleet_management.db')
+        c = conn.cursor()
+        c.execute('''INSERT INTO backups (backup_path, size_bytes)
+                     VALUES (?, ?)''', (backup_dir, total_size))
+        conn.commit()
+        conn.close()
+        
+        log_audit("backup_created", details=f"Backup size: {total_size} bytes")
+        return True, backup_dir, total_size
+    except Exception as e:
+        return False, str(e), 0
+
+def restore_backup(backup_path):
+    """Restore data from backup"""
+    try:
+        for vid in range(1, 4):
+            src = f"{backup_path}/trips_vehicle_{vid}.csv"
+            dst = f"trips_vehicle_{vid}.csv"
+            if os.path.exists(src):
+                shutil.copy2(src, dst)
+        
+        log_audit("backup_restored", details=f"Restored from: {backup_path}")
+        return True, "Restore successful"
+    except Exception as e:
+        return False, str(e)
+
+# ────────────────────────────────────────────────
+# Validation Functions
+# ────────────────────────────────────────────────
+def validate_odometer_readings(start_odo, end_odo, vehicle_id=None):
+    """Validate odometer readings with business rules"""
+    warnings = []
+    
+    if end_odo < start_odo:
+        warnings.append("End odometer reading should be greater than start reading")
+        return False, warnings
+    
+    distance = end_odo - start_odo
+    if distance > app_settings["max_daily_distance"]:
+        warnings.append(f"Unusually high distance detected ({distance} km). Please verify readings.")
+    
+    # Check against last known odometer
+    if vehicle_id:
+        status = get_vehicle_status(vehicle_id)
+        if start_odo < status["odo"] and start_odo > 0:
+            warnings.append(f"Start odometer ({start_odo}) is less than last recorded ({status['odo']})")
+    
+    return len(warnings) == 0, warnings
+
+def sanitize_input(text):
+    """Sanitize user input"""
+    if pd.isna(text):
+        return ""
+    return str(text).strip()
+
+# ────────────────────────────────────────────────
+# Caching for Performance
+# ────────────────────────────────────────────────
+@st.cache_data(ttl=300)  # Cache for 5 minutes
+def load_trips_cached(vid: int) -> pd.DataFrame:
+    """Cached version of load_trips for better performance"""
+    return load_trips(vid)
+
 def load_trips(vid: int) -> pd.DataFrame:
+    """Load trips from database with CSV fallback"""
+    try:
+        # Try to load from database first
+        conn = sqlite3.connect('fleet_management.db')
+        query = "SELECT * FROM trips WHERE vehicle_id = ? ORDER BY date DESC, time DESC"
+        df = pd.read_sql_query(query, conn, params=[vid])
+        conn.close()
+        
+        if not df.empty:
+            df['Date'] = pd.to_datetime(df['date'])
+            return df
+    except Exception as e:
+        print(f"Database load error: {e}")
+    
+    # Fallback to CSV
     file_path = f"trips_vehicle_{vid}.csv"
     columns = [
         "Date", "Time", "Driver", "Purpose", "Start Odo", "End Odo", "Distance (km)",
         "Fuel Added (L)", "Fuel Cost (R)", "Odo at Refuel", "Toll Amount (R)", "Toll Plaza / Notes"
     ]
+    
     if os.path.exists(file_path):
         df = pd.read_csv(file_path, parse_dates=["Date"])
         for col in columns:
@@ -49,20 +272,200 @@ def load_trips(vid: int) -> pd.DataFrame:
     else:
         return pd.DataFrame(columns=columns)
 
-
 def save_trips(vid: int, df: pd.DataFrame):
+    """Save trips to both CSV and database"""
+    # Save to CSV
     file_path = f"trips_vehicle_{vid}.csv"
     df.to_csv(file_path, index=False)
-
+    
+    # Save to database
+    try:
+        conn = sqlite3.connect('fleet_management.db')
+        for _, row in df.iterrows():
+            # Check if record exists
+            cursor = conn.cursor()
+            cursor.execute('''SELECT id FROM trips WHERE 
+                            vehicle_id = ? AND date = ? AND driver = ? AND start_odo = ?''',
+                         (vid, row['Date'].strftime('%Y-%m-%d'), row['Driver'], row['Start Odo']))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Update existing record
+                cursor.execute('''UPDATE trips SET
+                                time = ?, purpose = ?, end_odo = ?, distance = ?,
+                                fuel_added = ?, fuel_cost = ?, odo_at_refuel = ?,
+                                toll_amount = ?, toll_plaza_notes = ?, updated_at = CURRENT_TIMESTAMP
+                                WHERE id = ?''',
+                             (row['Time'], row['Purpose'], row['End Odo'], row['Distance (km)'],
+                              row['Fuel Added (L)'], row['Fuel Cost (R)'], row['Odo at Refuel'],
+                              row['Toll Amount (R)'], row['Toll Plaza / Notes'], existing[0]))
+            else:
+                # Insert new record
+                cursor.execute('''INSERT INTO trips 
+                                (vehicle_id, date, time, driver, purpose, start_odo, end_odo,
+                                 distance, fuel_added, fuel_cost, odo_at_refuel, toll_amount, toll_plaza_notes)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                             (vid, row['Date'].strftime('%Y-%m-%d'), row['Time'], row['Driver'],
+                              row['Purpose'], row['Start Odo'], row['End Odo'], row['Distance (km)'],
+                              row['Fuel Added (L)'], row['Fuel Cost (R)'], row['Odo at Refuel'],
+                              row['Toll Amount (R)'], row['Toll Plaza / Notes']))
+        
+        conn.commit()
+        conn.close()
+        
+        # Clear cache
+        st.cache_data.clear()
+        
+        # Log the save action
+        log_audit("data_saved", vid, f"Saved {len(df)} records")
+        
+    except Exception as e:
+        print(f"Database save error: {e}")
+        st.warning(f"Data saved to CSV but database sync failed: {e}")
 
 # ────────────────────────────────────────────────
-# Vehicle status
+# Enhanced Analytics Functions
+# ────────────────────────────────────────────────
+def calculate_fuel_efficiency(df):
+    """Calculate average fuel consumption per vehicle"""
+    if df.empty:
+        return 0
+    
+    total_distance = df['Distance (km)'].sum()
+    total_fuel = df['Fuel Added (L)'].sum()
+    
+    if total_fuel > 0:
+        return total_distance / total_fuel  # km per liter
+    return 0
+
+def predict_maintenance(df, current_odo, last_service_odo):
+    """Predict next maintenance based on usage patterns"""
+    if df.empty:
+        return 15000  # Default interval
+    
+    km_since_service = current_odo - last_service_odo
+    km_remaining = 15000 - km_since_service
+    
+    # Calculate average daily usage
+    if len(df) > 1:
+        date_range = (df['Date'].max() - df['Date'].min()).days
+        if date_range > 0:
+            avg_daily_km = df['Distance (km)'].sum() / date_range
+            if avg_daily_km > 0:
+                days_remaining = km_remaining / avg_daily_km
+                return km_remaining, days_remaining
+    
+    return km_remaining, None
+
+def analyze_driver_performance(df):
+    """Analyze driver performance metrics"""
+    if df.empty:
+        return pd.DataFrame()
+    
+    driver_stats = df.groupby('Driver').agg({
+        'Distance (km)': ['sum', 'mean', 'count'],
+        'Fuel Cost (R)': 'sum',
+        'Toll Amount (R)': 'sum'
+    }).round(2)
+    
+    driver_stats.columns = ['Total Distance', 'Avg Trip Distance', 'Trip Count', 'Total Fuel Cost', 'Total Tolls']
+    return driver_stats
+
+# ────────────────────────────────────────────────
+# Notification System
+# ────────────────────────────────────────────────
+def check_alerts(vehicle_id, status, df):
+    """Check for various alerts and return notifications"""
+    alerts = []
+    
+    # Fuel level alert
+    if status["fuel"] < alert_thresholds["fuel_low"]:
+        alerts.append({
+            "type": "warning",
+            "message": f"⚠️ Low fuel: {status['fuel']}% remaining",
+            "icon": "⛽"
+        })
+    
+    # Service alerts
+    next_date, km_remaining_str, km_remaining = estimate_next_service(status)
+    next_date_obj = datetime.strptime(next_date, "%Y-%m-%d").date()
+    days_to_service = (next_date_obj - datetime.now().date()).days
+    
+    if km_remaining < alert_thresholds["service_km_due"] or days_to_service < alert_thresholds["service_days_due"]:
+        alerts.append({
+            "type": "critical",
+            "message": f"🔴 Service due! {km_remaining:,} km or {days_to_service} days remaining",
+            "icon": "🚨"
+        })
+    elif km_remaining < alert_thresholds["service_km_warning"] or days_to_service < alert_thresholds["service_days_warning"]:
+        alerts.append({
+            "type": "warning",
+            "message": f"🟠 Service approaching: {km_remaining:,} km or {days_to_service} days left",
+            "icon": "⚠️"
+        })
+    
+    # Unusual driving patterns
+    if not df.empty and len(df) > 5:
+        avg_distance = df['Distance (km)'].mean()
+        max_distance = df['Distance (km)'].max()
+        if max_distance > avg_distance * 3:
+            alerts.append({
+                "type": "info",
+                "message": f"📊 Unusual trip detected: {max_distance} km trip (avg: {avg_distance:.0f} km)",
+                "icon": "ℹ️"
+            })
+    
+    return alerts
+
+# ────────────────────────────────────────────────
+# Page config & mobile/PWA support
+# ────────────────────────────────────────────────
+st.set_page_config(
+    page_title=app_settings["app_name"],
+    page_icon="⚖️",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# Check authentication
+if not check_password():
+    st.stop()
+
+# Mobile viewport + larger touch targets
+st.markdown("""
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <style>
+        .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+        button, .stButton>button { min-height: 48px; font-size: 16px; padding: 12px; min-width: 120px; }
+        input, .stTextInput>div>div>input, .stNumberInput>div>div>input { font-size: 16px; }
+        .stSelectbox>div>div>div, .stExpander { font-size: 16px; }
+        /* Alert styling */
+        .alert-critical { color: #dc3545; font-weight: bold; }
+        .alert-warning { color: #ffc107; font-weight: bold; }
+        .alert-info { color: #17a2b8; }
+        .stExpander:has(.stSuccess) > div > div > div:first-child {
+            color: #006400 !important;
+            font-weight: bold !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# ────────────────────────────────────────────────
+# Vehicle status (enhanced)
 # ────────────────────────────────────────────────
 def get_vehicle_status(vehicle_id: int) -> dict:
+    # Try to get latest odometer from trips
+    trips = load_trips_cached(vehicle_id)
+    latest_odo = 0
+    if not trips.empty and 'End Odo' in trips.columns:
+        valid_odos = trips[trips['End Odo'] > 0]['End Odo']
+        if not valid_odos.empty:
+            latest_odo = valid_odos.max()
+    
     data = {
-        1: {"location": "JHB Magistrate Court", "fuel": 65, "odo": 124850, "last_service": "2025-11-15", "alerts": "None"},
-        2: {"location": "En Route to CPT",      "fuel": 28, "odo": 98740,  "last_service": "2025-10-20", "alerts": "Low Fuel Warning"},
-        3: {"location": "Parked - PE Office",   "fuel": 92, "odo": 156320, "last_service": "2026-01-10", "alerts": "Service Due Soon"}
+        1: {"location": "JHB Magistrate Court", "fuel": 65, "odo": max(124850, latest_odo), "last_service": "2025-11-15", "alerts": "None"},
+        2: {"location": "En Route to CPT",      "fuel": 28, "odo": max(98740, latest_odo),  "last_service": "2025-10-20", "alerts": "Low Fuel Warning"},
+        3: {"location": "Parked - PE Office",   "fuel": 92, "odo": max(156320, latest_odo), "last_service": "2026-01-10", "alerts": "Service Due Soon"}
     }
     return data.get(vehicle_id, {"location": "Unknown", "fuel": 0, "odo": 0, "last_service": "N/A", "alerts": "N/A"})
 
@@ -77,26 +480,54 @@ def estimate_next_service(status: dict):
     return next_date.strftime("%Y-%m-%d"), f"+{km_rem:,} km", km_rem
 
 # ────────────────────────────────────────────────
-# Header
+# Header with user info
 # ────────────────────────────────────────────────
 st.markdown('<div class="header">', unsafe_allow_html=True)
-st.image("https://upload.wikimedia.org/wikipedia/commons/e/e9/Coat_of_arms_of_South_Africa.svg", width=160)
-st.markdown(f"""
-    <h1>MC Tsakane Dashboard</h1>
-    <h3>Department of Justice and Constitutional Development</h3>
-    <p>Internal Use • {datetime.now().year}</p>
-""", unsafe_allow_html=True)
+col1, col2, col3 = st.columns([1, 3, 1])
+with col1:
+    st.image("https://upload.wikimedia.org/wikipedia/commons/e/e9/Coat_of_arms_of_South_Africa.svg", width=160)
+with col2:
+    st.markdown(f"""
+        <h1>MC Tsakane Dashboard</h1>
+        <h3>Department of Justice and Constitutional Development</h3>
+        <p>Internal Use • {datetime.now().year}</p>
+    """, unsafe_allow_html=True)
+with col3:
+    st.markdown(f"👤 **{st.session_state.get('user', 'User')}**")
+    if st.button("🚪 Logout"):
+        for key in ['authenticated', 'user']:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
+
+# Automatic backup check
+if app_settings["backup_enabled"]:
+    try:
+        conn = sqlite3.connect('fleet_management.db')
+        c = conn.cursor()
+        c.execute('''SELECT MAX(created_at) FROM backups''')
+        last_backup = c.fetchone()[0]
+        conn.close()
+        
+        if last_backup:
+            last_backup_date = datetime.strptime(last_backup, '%Y-%m-%d %H:%M:%S')
+            days_since_backup = (datetime.now() - last_backup_date).days
+            if days_since_backup >= app_settings["backup_interval_days"]:
+                with st.spinner("Creating automatic backup..."):
+                    success, path, size = backup_data()
+                    if success:
+                        st.success(f"✅ Automatic backup created: {path}")
+    except Exception as e:
+        pass
 
 # ────────────────────────────────────────────────
 # Tabs
 # ────────────────────────────────────────────────
-tab_home, tab_sundry, tab_fleet = st.tabs(["HOME", "SUNDRY", "FLEET SERVICES"])
-
-drivers_list = ["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi", "ML Kgakatsi"]
+tab_home, tab_sundry, tab_fleet, tab_admin = st.tabs(["HOME", "SUNDRY", "FLEET SERVICES", "ADMIN"])
 
 # ────────────────────────────────────────────────
-# HOME
+# HOME (enhanced)
 # ────────────────────────────────────────────────
 with tab_home:
     st.subheader("Witness Fees – Monthly Expenditure Overview")
@@ -113,34 +544,58 @@ with tab_home:
     st.markdown("---")
     st.subheader("🚗 Fleet Health & Service Overview")
 
-    vehicles = [{"id": 1, "reg": "LR 93 VW GP"}, {"id": 2, "reg": "BW 47 KG GP"}, {"id": 3, "reg": "JM 45 CY GP"}]
-
     summary_data = []
+    alerts_summary = []
+    
     for v in vehicles:
         s = get_vehicle_status(v["id"])
+        trips = load_trips_cached(v["id"])
         next_d, next_k, km_r = estimate_next_service(s)
         days_left = (datetime.strptime(next_d, "%Y-%m-%d").date() - datetime.now().date()).days
-        status = "🟥 Due Soon" if days_left < 30 or km_r < 2000 else "🟧 Approaching" if days_left < 90 or km_r < 5000 else "🟩 On Track"
+        
+        # Enhanced status calculation
+        if days_left < 30 or km_r < 2000:
+            status = "🔴 Due Soon"
+        elif days_left < 90 or km_r < 5000:
+            status = "🟠 Approaching"
+        else:
+            status = "🟢 On Track"
+        
+        # Get alerts
+        vehicle_alerts = check_alerts(v["id"], s, trips)
+        alerts_summary.extend([(v["reg"], alert) for alert in vehicle_alerts])
 
         summary_data.append({
-            "Vehicle": v["reg"], "Location": s["location"], "Fuel": f"{s['fuel']}%", "Odometer": f"{s['odo']:,} km",
-            "Last Service": s["last_service"], "Next Service (Date)": next_d, "Km Remaining": next_k, "Status": status
+            "Vehicle": v["reg"], 
+            "Location": s["location"], 
+            "Fuel": f"{s['fuel']}%", 
+            "Odometer": f"{s['odo']:,} km",
+            "Last Service": s["last_service"], 
+            "Next Service (Date)": next_d, 
+            "Km Remaining": next_k, 
+            "Status": status
         })
 
     summary_df = pd.DataFrame(summary_data)
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total Vehicles", len(vehicles))
-    col2.metric("Avg Fuel Level", f"{sum(get_vehicle_status(i)['fuel'] for i in range(1,4))/3:.0f}%")
-    col3.metric("Total Fleet Odometer", f"{sum(get_vehicle_status(i)['odo'] for i in range(1,4)):,} km")
+    col2.metric("Avg Fuel Level", f"{sum(get_vehicle_status(v['id'])['fuel'] for v in vehicles)/len(vehicles):.0f}%")
+    col3.metric("Total Fleet Odometer", f"{sum(get_vehicle_status(v['id'])['odo'] for v in vehicles):,} km")
     col4.metric("Vehicles Needing Attention", len([r for r in summary_data if "Due Soon" in r["Status"]]))
 
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
-
+    
+    # Display alerts
+    if alerts_summary:
+        st.markdown("### 🚨 Active Alerts")
+        for reg, alert in alerts_summary:
+            st.markdown(f"**{reg}**: {alert['icon']} {alert['message']}")
+    
     st.caption("Next service: earlier of 6 months or 15,000 km since last service.")
 
 # ────────────────────────────────────────────────
-# SUNDRY
+# SUNDRY (enhanced with validation)
 # ────────────────────────────────────────────────
 with tab_sundry:
     st.subheader("Witness Fees Register")
@@ -154,27 +609,44 @@ with tab_sundry:
         "Court/Office": ["JHB Magistrate", "CPT High", "DBN Regional", "JHB High", "PE Magistrate"]
     }
     df = pd.DataFrame(sample_data)
-    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+    
+    # Add validation for amounts
+    column_config_sundry = {
+        "Amount Paid (ZAR)": st.column_config.NumberColumn(
+            "Amount Paid (ZAR)",
+            min_value=0,
+            max_value=100000,
+            format="R %.2f",
+            required=True,
+            step=50.0
+        ),
+        "Status": st.column_config.SelectboxColumn(
+            "Status",
+            options=["Paid", "Pending Approval", "Awaiting Receipt", "Rejected"],
+            required=True
+        )
+    }
+    
+    edited_df = st.data_editor(df, column_config=column_config_sundry, num_rows="dynamic", use_container_width=True)
 
     total_spent = edited_df["Amount Paid (ZAR)"].sum()
     pending = edited_df[edited_df["Status"].isin(["Pending Approval", "Awaiting Receipt"])]["Amount Paid (ZAR)"].sum()
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     col1.metric("Total Spent", f"R {total_spent:,.2f}")
     col2.metric("Pending / Awaiting", f"R {pending:,.2f}")
+    
+    # Budget alert
+    monthly_budget = 100000
+    if total_spent > monthly_budget * 0.9:
+        st.warning(f"⚠️ Monthly budget usage: {total_spent/monthly_budget*100:.1f}% (R{total_spent:,.2f} of R{monthly_budget:,.2f})")
 
 # ────────────────────────────────────────────────
-# FLEET SERVICES
+# FLEET SERVICES (enhanced)
 # ────────────────────────────────────────────────
 with tab_fleet:
     st.subheader("Fleet Services – Gauteng Region")
     st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips/logs.")
-
-    vehicles = [
-        {"id": 1, "reg": "LR 93 VW GP", "short": "Vehicle 1"},
-        {"id": 2, "reg": "BW 47 KG GP", "short": "Vehicle 2"},
-        {"id": 3, "reg": "JM 45 CY GP", "short": "Vehicle 3"},
-    ]
 
     vehicle_tabs = st.tabs([f"{v['short']} ({v['reg']})" for v in vehicles])
 
@@ -184,12 +656,12 @@ with tab_fleet:
         reg = veh["reg"]
         status = get_vehicle_status(vid)
 
-        current_trips = load_trips(vid)
+        current_trips = load_trips_cached(vid)
 
         def calc_distance(row):
-            if row["Purpose"] == "Toll payment":
+            if row.get("Purpose") == "Toll payment":
                 return 0
-            if pd.notna(row["Start Odo"]) and pd.notna(row["End Odo"]):
+            if pd.notna(row.get("Start Odo")) and pd.notna(row.get("End Odo")):
                 return max(0, row["End Odo"] - row["Start Odo"])
             return row.get("Distance (km)", 0)
 
@@ -197,6 +669,15 @@ with tab_fleet:
 
         with tab:
             st.markdown(f"### {reg}")
+
+            # Display alerts
+            alerts = check_alerts(vid, status, current_trips)
+            if alerts:
+                with st.expander("🚨 Vehicle Alerts", expanded=True):
+                    for alert in alerts:
+                        alert_class = f"alert-{alert['type']}"
+                        st.markdown(f"<div class='{alert_class}'>{alert['icon']} {alert['message']}</div>", 
+                                  unsafe_allow_html=True)
 
             c1, c2, c3 = st.columns([2, 2, 1.4])
             c1.markdown(f"**Current location**  \n{status['location']}")
@@ -230,7 +711,7 @@ with tab_fleet:
             fig.update_layout(margin=dict(l=20, r=20, t=40, b=20), height=300)
             st.plotly_chart(fig, use_container_width=True, key=f"mileage_chart_vehicle_{vid}")
 
-            subtab_logs, subtab_report = st.tabs(["Trip Logs", "Monthly Report"])
+            subtab_logs, subtab_report, subtab_analytics = st.tabs(["Trip Logs", "Monthly Report", "Analytics"])
 
             with subtab_logs:
                 st.subheader(f"Recent trips / logs – {reg}")
@@ -311,11 +792,30 @@ with tab_fleet:
                             new_data = new_data[[c for c in new_data.columns if c in known_cols]]
 
                             if not new_data.empty:
-                                current_trips = pd.concat([current_trips, new_data], ignore_index=True)
-                                current_trips["Distance (km)"] = current_trips.apply(calc_distance, axis=1)
-                                save_trips(vid, current_trips)
-                                st.success(f"Imported {len(new_data)} rows successfully! Data saved.")
-                                st.rerun()
+                                # Validate imported data
+                                valid_rows = []
+                                for _, row in new_data.iterrows():
+                                    if pd.notna(row.get('Start Odo')) and pd.notna(row.get('End Odo')):
+                                        is_valid, warnings = validate_odometer_readings(
+                                            row['Start Odo'], row['End Odo'], vid
+                                        )
+                                        if is_valid:
+                                            valid_rows.append(row)
+                                        else:
+                                            for warning in warnings:
+                                                st.warning(f"Skipped row: {warning}")
+                                    else:
+                                        valid_rows.append(row)
+                                
+                                if valid_rows:
+                                    valid_df = pd.DataFrame(valid_rows)
+                                    current_trips = pd.concat([current_trips, valid_df], ignore_index=True)
+                                    current_trips["Distance (km)"] = current_trips.apply(calc_distance, axis=1)
+                                    save_trips(vid, current_trips)
+                                    st.success(f"Imported {len(valid_df)} rows successfully! Data saved.")
+                                    st.rerun()
+                                else:
+                                    st.warning("No valid data rows found.")
                             else:
                                 st.warning("No valid data columns found in the file.")
 
@@ -327,8 +827,8 @@ with tab_fleet:
                 # ────────────────────────────────────────────────
                 st.subheader(f"Recent trips / logs – {reg}")
 
-                # Pagination (20 rows/page)
-                rows_per_page = 20
+                # Pagination
+                rows_per_page = app_settings["rows_per_page"]
                 total_rows = len(current_trips)
                 total_pages = max(1, (total_rows + rows_per_page - 1) // rows_per_page)
 
@@ -373,13 +873,15 @@ with tab_fleet:
                     total_distance = current_trips["Distance (km)"].sum()
                     total_fuel_cost = current_trips["Fuel Cost (R)"].sum()
                     total_tolls = current_trips["Toll Amount (R)"].sum()
+                    fuel_efficiency = calculate_fuel_efficiency(current_trips)
 
-                    colA, colB, colC = st.columns(3)
+                    colA, colB, colC, colD = st.columns(4)
                     colA.metric("Total Distance", f"{total_distance:,} km", key=f"metric_dist_{vid}")
                     colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}", key=f"metric_fuel_{vid}")
                     colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}", key=f"metric_tolls_{vid}")
+                    colD.metric("Fuel Efficiency", f"{fuel_efficiency:.1f} km/L", key=f"metric_eff_{vid}")
 
-                # Add Trip
+                # Add Trip (with validation)
                 with st.expander("➕ Add Trip", expanded=False):
                     with st.form(key=f"add_trip_form_{vid}"):
                         col_date, col_driver = st.columns(2)
@@ -393,6 +895,13 @@ with tab_fleet:
                         purpose = st.text_input("Purpose of trip", key=f"trip_purpose_{vid}")
 
                         if st.form_submit_button("Add Trip", type="primary"):
+                            # Validate
+                            is_valid, warnings = validate_odometer_readings(start_odo, end_odo, vid)
+                            
+                            if not is_valid:
+                                for warning in warnings:
+                                    st.warning(warning)
+                            
                             distance = max(0, end_odo - start_odo) if end_odo >= start_odo else 0
                             new_row = pd.DataFrame([{
                                 "Date": pd.to_datetime(trip_date),
@@ -412,6 +921,7 @@ with tab_fleet:
                             current_trips = pd.concat([current_trips, new_row], ignore_index=True)
                             current_trips["Distance (km)"] = current_trips.apply(calc_distance, axis=1)
                             save_trips(vid, current_trips)
+                            log_audit("trip_added", vid, f"Trip added: {driver}, {distance} km")
 
                             st.success(
                                 f"Trip added successfully!\n"
@@ -453,6 +963,7 @@ with tab_fleet:
 
                             current_trips = pd.concat([current_trips, new_row], ignore_index=True)
                             save_trips(vid, current_trips)
+                            log_audit("fuel_added", vid, f"Fuel: {fuel_litres}L, Cost: R{fuel_cost}")
 
                             st.success("Fuel slip added successfully!")
                             st.rerun()
@@ -491,6 +1002,7 @@ with tab_fleet:
 
                             current_trips = pd.concat([current_trips, new_row], ignore_index=True)
                             save_trips(vid, current_trips)
+                            log_audit("toll_added", vid, f"Toll: R{toll_amount} at {toll_plaza}")
 
                             st.success("Toll slip added successfully!")
                             st.rerun()
@@ -532,18 +1044,23 @@ with tab_fleet:
                                        title=f"Summary for {selected_month_str}")
                     st.plotly_chart(fig_month, use_container_width=True, key=f"monthly_chart_{vid}_{selected_month_str}")
 
+                    # Export options
+                    col1, col2 = st.columns(2)
+                    
                     # CSV export
                     csv_buffer = io.StringIO()
                     monthly_trips.to_csv(csv_buffer, index=False)
                     csv_data = csv_buffer.getvalue()
 
-                    st.download_button(
-                        label="📥 Download Trips (CSV)",
-                        data=csv_data,
-                        file_name=f"Trips_{reg.replace(' ', '_')}_{selected_month_str}.csv",
-                        mime="text/csv",
-                        key=f"csv_download_{vid}_{selected_month_str}"
-                    )
+                    with col1:
+                        st.download_button(
+                            label="📥 Download Trips (CSV)",
+                            data=csv_data,
+                            file_name=f"Trips_{reg.replace(' ', '_')}_{selected_month_str}.csv",
+                            mime="text/csv",
+                            key=f"csv_download_{vid}_{selected_month_str}",
+                            use_container_width=True
+                        )
 
                     # Excel export
                     excel_buffer = io.BytesIO()
@@ -553,16 +1070,229 @@ with tab_fleet:
 
                     excel_buffer.seek(0)
 
-                    st.download_button(
-                        label="📊 Download Report (Excel)",
-                        data=excel_buffer,
-                        file_name=f"Monthly_Report_{reg.replace(' ', '_')}_{selected_month_str}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key=f"excel_download_{vid}_{selected_month_str}"
-                    )
+                    with col2:
+                        st.download_button(
+                            label="📊 Download Report (Excel)",
+                            data=excel_buffer,
+                            file_name=f"Monthly_Report_{reg.replace(' ', '_')}_{selected_month_str}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"excel_download_{vid}_{selected_month_str}",
+                            use_container_width=True
+                        )
 
                 else:
                     st.info("No trip data yet. Add entries in Trip Logs.")
+
+            with subtab_analytics:
+                st.subheader(f"Advanced Analytics – {reg}")
+                
+                if not current_trips.empty:
+                    # Driver performance
+                    st.markdown("#### Driver Performance")
+                    driver_stats = analyze_driver_performance(current_trips)
+                    st.dataframe(driver_stats, use_container_width=True)
+                    
+                    # Fuel efficiency trend
+                    st.markdown("#### Fuel Efficiency Trend")
+                    fuel_data = current_trips[current_trips['Fuel Added (L)'] > 0].copy()
+                    if not fuel_data.empty:
+                        fuel_data['Efficiency'] = fuel_data['Distance (km)'] / fuel_data['Fuel Added (L)']
+                        fuel_data = fuel_data.sort_values('Date')
+                        
+                        fig_fuel = px.line(fuel_data, x='Date', y='Efficiency',
+                                         title='Fuel Efficiency Over Time (km/L)')
+                        fig_fuel.update_traces(line_color='#28a745')
+                        st.plotly_chart(fig_fuel, use_container_width=True)
+                    
+                    # Cost analysis
+                    st.markdown("#### Cost Analysis")
+                    cost_cols = ['Fuel Cost (R)', 'Toll Amount (R)']
+                    cost_data = current_trips[cost_cols].sum()
+                    fig_costs = px.pie(values=cost_data.values, names=cost_data.index,
+                                      title='Cost Breakdown')
+                    st.plotly_chart(fig_costs, use_container_width=True)
+                    
+                    # Maintenance prediction
+                    last_service_km = current_trips[current_trips['Purpose'] == 'Service']['End Odo'].max() if 'Service' in current_trips['Purpose'].values else 0
+                    if last_service_km > 0:
+                        km_remaining, days_remaining = predict_maintenance(current_trips, status['odo'], last_service_km)
+                        st.info(f"**Maintenance Prediction**: {km_remaining:.0f} km remaining until next service" + 
+                               (f" (approx {days_remaining:.0f} days)" if days_remaining else ""))
+                else:
+                    st.info("Add trip data to view analytics.")
+
+# ────────────────────────────────────────────────
+# ADMIN Tab (new)
+# ────────────────────────────────────────────────
+with tab_admin:
+    st.subheader("System Administration")
+    
+    admin_tabs = st.tabs(["Backup & Restore", "Audit Log", "Configuration", "System Health"])
+    
+    with admin_tabs[0]:  # Backup & Restore
+        st.markdown("### Data Backup")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Create Manual Backup", use_container_width=True):
+                with st.spinner("Creating backup..."):
+                    success, path, size = backup_data()
+                    if success:
+                        st.success(f"✅ Backup created successfully!\nPath: {path}\nSize: {size/1024:.2f} KB")
+                    else:
+                        st.error(f"❌ Backup failed: {path}")
+        
+        with col2:
+            # List available backups
+            try:
+                conn = sqlite3.connect('fleet_management.db')
+                backups_df = pd.read_sql_query('''SELECT * FROM backups ORDER BY created_at DESC LIMIT 10''', conn)
+                conn.close()
+                
+                if not backups_df.empty:
+                    selected_backup = st.selectbox(
+                        "Select backup to restore",
+                        options=backups_df['backup_path'].tolist(),
+                        format_func=lambda x: f"{Path(x).name} ({pd.to_datetime(backups_df[backups_df['backup_path']==x]['created_at'].iloc[0]).strftime('%Y-%m-%d %H:%M')})"
+                    )
+                    
+                    if st.button("🔄 Restore Selected Backup", type="primary", use_container_width=True):
+                        if st.checkbox("I understand this will overwrite current data"):
+                            with st.spinner("Restoring backup..."):
+                                success, message = restore_backup(selected_backup)
+                                if success:
+                                    st.success(f"✅ {message}")
+                                    st.cache_data.clear()
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {message}")
+            except Exception as e:
+                st.info("No backups available yet.")
+    
+    with admin_tabs[1]:  # Audit Log
+        st.markdown("### Audit Log")
+        
+        try:
+            conn = sqlite3.connect('fleet_management.db')
+            audit_df = pd.read_sql_query('''SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 100''', conn)
+            conn.close()
+            
+            if not audit_df.empty:
+                st.dataframe(audit_df, use_container_width=True)
+                
+                # Export audit log
+                csv = audit_df.to_csv(index=False)
+                st.download_button(
+                    "📥 Download Audit Log",
+                    data=csv,
+                    file_name=f"audit_log_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.info("No audit records yet.")
+        except Exception as e:
+            st.error(f"Error loading audit log: {e}")
+    
+    with admin_tabs[2]:  # Configuration
+        st.markdown("### System Configuration")
+        
+        # Display current config
+        st.json(config)
+        
+        if st.button("Reload Configuration"):
+            st.cache_data.clear()
+            st.success("Configuration reloaded!")
+            st.rerun()
+    
+    with admin_tabs[3]:  # System Health
+        st.markdown("### System Health")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### Storage")
+            # Check storage usage
+            total_size = 0
+            for vid in range(1, 4):
+                if os.path.exists(f"trips_vehicle_{vid}.csv"):
+                    total_size += os.path.getsize(f"trips_vehicle_{vid}.csv")
+            
+            if os.path.exists("fleet_management.db"):
+                total_size += os.path.getsize("fleet_management.db")
+            
+            st.metric("Total Data Size", f"{total_size/1024:.2f} KB")
+            
+            # Database status
+            try:
+                conn = sqlite3.connect('fleet_management.db')
+                c = conn.cursor()
+                c.execute("SELECT COUNT(*) FROM trips")
+                trip_count = c.fetchone()[0]
+                c.execute("SELECT COUNT(*) FROM audit_log")
+                audit_count = c.fetchone()[0]
+                conn.close()
+                
+                st.metric("Trip Records", trip_count)
+                st.metric("Audit Records", audit_count)
+            except:
+                st.warning("Database not initialized")
+        
+        with col2:
+            st.markdown("#### Cache Status")
+            st.metric("Cache Items", len(st.cache_data.keys()) if hasattr(st.cache_data, 'keys') else 0)
+            
+            if st.button("Clear Cache"):
+                st.cache_data.clear()
+                st.success("Cache cleared!")
+
+# ────────────────────────────────────────────────
+# Unit Tests (hidden in production)
+# ────────────────────────────────────────────────
+def run_tests():
+    """Run unit tests"""
+    st.markdown("### Running Tests")
+    
+    tests_passed = 0
+    tests_failed = 0
+    
+    # Test calc_distance
+    test_row1 = {"Start Odo": 1000, "End Odo": 1200, "Purpose": "Trip"}
+    result1 = calc_distance(test_row1)
+    if result1 == 200:
+        st.success("✅ calc_distance test 1 passed")
+        tests_passed += 1
+    else:
+        st.error(f"❌ calc_distance test 1 failed: got {result1}, expected 200")
+        tests_failed += 1
+    
+    test_row2 = {"Start Odo": 1200, "End Odo": 1000, "Purpose": "Trip"}
+    result2 = calc_distance(test_row2)
+    if result2 == 0:
+        st.success("✅ calc_distance test 2 passed")
+        tests_passed += 1
+    else:
+        st.error(f"❌ calc_distance test 2 failed: got {result2}, expected 0")
+        tests_failed += 1
+    
+    # Test fuel efficiency
+    test_df = pd.DataFrame({
+        'Distance (km)': [100, 200],
+        'Fuel Added (L)': [10, 20]
+    })
+    result3 = calculate_fuel_efficiency(test_df)
+    if abs(result3 - 10.0) < 0.01:
+        st.success("✅ fuel efficiency test passed")
+        tests_passed += 1
+    else:
+        st.error(f"❌ fuel efficiency test failed: got {result3}, expected 10.0")
+        tests_failed += 1
+    
+    st.metric("Tests Passed", tests_passed)
+    st.metric("Tests Failed", tests_failed)
+
+# Add test runner in admin tab (hidden by default)
+if st.sidebar.checkbox("🧪 Run Tests", value=False):
+    run_tests()
 
 st.markdown("---")
 st.caption(f"© Department of Justice and Constitutional Development • {datetime.now().year} • Internal use only")
