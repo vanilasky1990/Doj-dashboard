@@ -169,7 +169,7 @@ with tab_fleet:
 
         current_trips = st.session_state[session_key].copy()
 
-        # Force auto-calculation of Distance
+        # Auto-calculate Distance
         def calc_distance(row):
             if row["Purpose"] == "Toll payment":
                 return 0
@@ -283,7 +283,7 @@ with tab_fleet:
                     current_trips.loc[original_slice_index] = edited_page.values
                     st.session_state[session_key] = current_trips
 
-                # Force distance recalc
+                # Force distance recalc after edit
                 current_trips["Distance (km)"] = current_trips.apply(calc_distance, axis=1)
 
                 st.caption(f"Showing rows {start_idx+1}–{end_idx} of {total_rows}")
@@ -300,47 +300,45 @@ with tab_fleet:
                     colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}")
 
                 # Add Trip Entry
-with st.expander("➕ Add Trip", expanded=False):
-    with st.form(key=f"add_trip_form_{vid}"):
-        col_date, col_driver = st.columns(2)
-        trip_date = col_date.date_input("Trip date", value=datetime.now().date())
-        driver = col_driver.selectbox("Driver", options=drivers_list)
+                with st.expander("➕ Add Trip", expanded=False):
+                    with st.form(key=f"add_trip_form_{vid}"):
+                        col_date, col_driver = st.columns(2)
+                        trip_date = col_date.date_input("Trip date", value=datetime.now().date())
+                        driver = col_driver.selectbox("Driver", options=drivers_list)
 
-        col_start, col_end = st.columns(2)
-        start_odo = col_start.number_input("Start Odometer (km)", min_value=0, step=1)
-        end_odo = col_end.number_input("End Odometer (km)", min_value=0, step=1)
+                        col_start, col_end = st.columns(2)
+                        start_odo = col_start.number_input("Start Odometer (km)", min_value=0, step=1)
+                        end_odo = col_end.number_input("End Odometer (km)", min_value=0, step=1)
 
-        purpose = st.text_input("Purpose of trip", "")
+                        purpose = st.text_input("Purpose of trip", "")
 
-        if st.form_submit_button("Add Trip", type="primary"):
-            distance = max(0, end_odo - start_odo) if end_odo >= start_odo else 0
-            
-            new_row = pd.DataFrame([{
-                "Date": pd.to_datetime(trip_date),
-                "Time": None,
-                "Driver": driver,
-                "Purpose": purpose,
-                "Start Odo": start_odo,
-                "End Odo": end_odo,
-                "Distance (km)": distance,
-                "Fuel Added (L)": 0.0,
-                "Fuel Cost (R)": 0.0,
-                "Odo at Refuel": 0,
-                "Toll Amount (R)": 0.0,
-                "Toll Plaza / Notes": ""
-            }])
+                        if st.form_submit_button("Add Trip", type="primary"):
+                            distance = max(0, end_odo - start_odo) if end_odo >= start_odo else 0
+                            new_row = pd.DataFrame([{
+                                "Date": pd.to_datetime(trip_date),
+                                "Time": None,
+                                "Driver": driver,
+                                "Purpose": purpose,
+                                "Start Odo": start_odo,
+                                "End Odo": end_odo,
+                                "Distance (km)": distance,
+                                "Fuel Added (L)": 0.0,
+                                "Fuel Cost (R)": 0.0,
+                                "Odo at Refuel": 0,
+                                "Toll Amount (R)": 0.0,
+                                "Toll Plaza / Notes": ""
+                            }])
 
-            st.session_state[session_key] = pd.concat(
-                [st.session_state[session_key], new_row],
-                ignore_index=True
-            )
-            
-            # Fixed f-string – all on one line or properly wrapped
-            st.success(
-                f"Trip added successfully!  \n"
-                f"Driver: {driver} | Date: {trip_date} | Distance: {distance} km"
-            )
-            st.rerun()
+                            st.session_state[session_key] = pd.concat(
+                                [st.session_state[session_key], new_row],
+                                ignore_index=True
+                            )
+                            st.success(
+                                f"Trip added successfully!\n"
+                                f"Driver: {driver} | Date: {trip_date} | Distance: {distance} km"
+                            )
+                            st.rerun()
+
                 # Add Fuel Slip
                 with st.expander("➕ Add Fuel Slip", expanded=False):
                     with st.form(key=f"add_fuel_form_{vid}"):
