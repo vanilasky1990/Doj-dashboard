@@ -142,9 +142,9 @@ with tab_fleet:
     st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips/logs.")
 
     vehicles = [
-        {"id": 1, "reg": "JM 45 CY GP", "short": "Vehicle 1"},
+        {"id": 1, "reg": "LR 93 VW GP", "short": "Vehicle 1"},
         {"id": 2, "reg": "BW 47 KG GP", "short": "Vehicle 2"},
-        {"id": 3, "reg": "LR 93 VW GP", "short": "Vehicle 3"},
+        {"id": 3, "reg": "JM 45 CY GP", "short": "Vehicle 3"},
     ]
 
     vehicle_tabs = st.tabs([f"{v['short']} ({v['reg']})" for v in vehicles])
