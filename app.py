@@ -116,6 +116,7 @@ with tab_home:
 # ────────────────────────────────────────────────
 with tab_sundry:
     st.subheader("Witness Fees Register")
+
     sample_data = {
         "Date": ["2026-01-15", "2026-01-22", "2026-02-05", "2026-02-10", "2026-02-18"],
         "Witness Name": ["A. Nkosi", "B. Mthembu", "C. v/d Merwe", "D. Pillay", "E. Sithole"],
@@ -142,9 +143,9 @@ with tab_fleet:
     st.markdown("Vehicle tracking, fuel status, odometer, alerts & recent trips/logs.")
 
     vehicles = [
-        {"id": 1, "reg": "LR 93 VW GP", "short": "Vehicle 1"},
+        {"id": 1, "reg": "JM 45 CY GP", "short": "Vehicle 1"},
         {"id": 2, "reg": "BW 47 KG GP", "short": "Vehicle 2"},
-        {"id": 3, "reg": "JM 45 CY GP", "short": "Vehicle 3"},
+        {"id": 3, "reg": "LR 93 VW GP", "short": "Vehicle 3"},
     ]
 
     vehicle_tabs = st.tabs([f"{v['short']} ({v['reg']})" for v in vehicles])
@@ -246,7 +247,8 @@ with tab_fleet:
                     )
 
                 start_idx = (page - 1) * rows_per_page
-                end_idx = start_idx + rows_per_page
+                end_idx = min(start_idx + rows_per_page, total_rows)
+
                 page_data = current_trips.iloc[start_idx:end_idx].copy()
 
                 edited_page = st.data_editor(
@@ -258,13 +260,14 @@ with tab_fleet:
                     key=f"trips_editor_page_{vid}_{page}"
                 )
 
-                # Safe update (no duplication)
+                # Safe update – use loc with reindexed edited_page
                 if not edited_page.empty:
-                    edited_page.index = current_trips.index[start_idx:end_idx]
-                    current_trips.loc[current_trips.index[start_idx:end_idx]] = edited_page.values
+                    original_slice_index = current_trips.index[start_idx:end_idx]
+                    edited_page = edited_page.reindex(original_slice_index)  # align index
+                    current_trips.loc[original_slice_index] = edited_page.values
                     st.session_state[session_key] = current_trips
 
-                st.caption(f"Showing rows {start_idx+1}–{min(end_idx, total_rows)} of {total_rows}")
+                st.caption(f"Showing rows {start_idx+1}–{end_idx} of {total_rows}")
                 st.metric("Total log entries", total_rows)
 
                 if total_rows > 0:
