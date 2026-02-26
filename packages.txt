@@ -1,1 +1,5 @@
-
+# System dependencies for data processing
+build-essential
+python3-dev
+sqlite3
+libsqlite3-dev
