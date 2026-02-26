@@ -169,7 +169,7 @@ with tab_fleet:
 
         current_trips = st.session_state[session_key].copy()
 
-        # Force auto-calculation of Distance on every render
+        # Force auto-calculation of Distance
         def calc_distance(row):
             if row["Purpose"] == "Toll payment":
                 return 0
@@ -276,14 +276,14 @@ with tab_fleet:
                     key=f"trips_editor_page_{vid}_{page}"
                 )
 
-                # Safe update – no duplication
+                # Safe update
                 if not edited_page.empty:
                     original_slice_index = current_trips.index[start_idx:end_idx]
                     edited_page = edited_page.reindex(original_slice_index)
                     current_trips.loc[original_slice_index] = edited_page.values
                     st.session_state[session_key] = current_trips
 
-                # Force distance recalc after edit
+                # Force distance recalc
                 current_trips["Distance (km)"] = current_trips.apply(calc_distance, axis=1)
 
                 st.caption(f"Showing rows {start_idx+1}–{end_idx} of {total_rows}")
@@ -333,7 +333,8 @@ with tab_fleet:
                                 [st.session_state[session_key], new_row],
                                 ignore_index=True
                             )
-                            st.success("Trip added!")
+                            st.success(f"Trip added successfully!  
+Driver: {driver} | Date: {trip_date} | Distance: {distance} km")
                             st.rerun()
 
                 # Add Fuel Slip
@@ -375,7 +376,7 @@ with tab_fleet:
                             st.success("Fuel slip added!")
                             st.rerun()
 
-                # Add Toll Slip – no Odo fields
+                # Add Toll Slip
                 with st.expander("➕ Add Toll Slip", expanded=False):
                     st.caption("Toll payments do not require odometer readings.")
                     
