@@ -317,7 +317,7 @@ with tab_fleet:
                             st.error(f"Error reading file: {str(e)}")
 
                 # ────────────────────────────────────────────────
-                # Table + pagination
+                # Table display + edit + pagination
                 # ────────────────────────────────────────────────
                 st.subheader(f"Recent trips / logs – {reg}")
 
@@ -359,7 +359,15 @@ with tab_fleet:
                     save_trips(vid, current_trips)
 
                 st.caption(f"Showing rows {start_idx+1}–{end_idx} of {total_rows}")
-                st.metric("Total log entries", total_rows, key=f"metric_entries_{vid}")
+
+                # ────────────────────────────────────────────────
+                # FIXED METRICS BLOCK - unique keys using v{vid}
+                # ────────────────────────────────────────────────
+                st.metric(
+                    label="Total log entries",
+                    value=total_rows,
+                    key=f"total_entries_v{vid}"
+                )
 
                 if total_rows > 0:
                     total_distance = current_trips["Distance (km)"].sum()
@@ -367,9 +375,21 @@ with tab_fleet:
                     total_tolls = current_trips["Toll Amount (R)"].sum()
 
                     colA, colB, colC = st.columns(3)
-                    colA.metric("Total Distance", f"{total_distance:,} km", key=f"metric_dist_{vid}")
-                    colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}", key=f"metric_fuel_{vid}")
-                    colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}", key=f"metric_tolls_{vid}")
+                    colA.metric(
+                        "Total Distance",
+                        f"{total_distance:,} km",
+                        key=f"dist_v{vid}"
+                    )
+                    colB.metric(
+                        "Total Fuel Cost",
+                        f"R {total_fuel_cost:,.2f}",
+                        key=f"fuel_v{vid}"
+                    )
+                    colC.metric(
+                        "Total Tolls Paid",
+                        f"R {total_tolls:,.2f}",
+                        key=f"tolls_v{vid}"
+                    )
 
                 # Add Trip
                 with st.expander("➕ Add Trip", expanded=False):
