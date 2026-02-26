@@ -167,13 +167,15 @@ with tab_fleet:
 
         current_trips = st.session_state[session_key].copy()
 
-        # Auto-calculate Distance
-        current_trips["Distance (km)"] = current_trips.apply(
-            lambda r: max(0, r["End Odo"] - r["Start Odo"])
-            if pd.notna(r["Start Odo"]) and pd.notna(r["End Odo"])
-            else 0,
-            axis=1
-        )
+        # Auto-calculate Distance (force 0 for tolls)
+        def calc_distance(row):
+            if row["Purpose"] == "Toll payment":
+                return 0
+            if pd.notna(row["Start Odo"]) and pd.notna(row["End Odo"]):
+                return max(0, row["End Odo"] - row["Start Odo"])
+            return row.get("Distance (km)", 0)
+
+        current_trips["Distance (km)"] = current_trips.apply(calc_distance, axis=1)
 
         with tab:
             st.markdown(f"### {reg}")
@@ -214,20 +216,16 @@ with tab_fleet:
 
             with subtab_logs:
                 st.subheader(f"Recent trips / logs – {reg}")
-                st.caption("Distance is auto-calculated from End Odo - Start Odo (read-only).")
+                st.caption("Distance is auto-calculated from End Odo - Start Odo for trips (read-only). Tolls have 0 distance.")
 
                 column_config = {
                     "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD", required=True),
                     "Time": st.column_config.TimeColumn("Time", format="HH:mm", step=60),
-                    "Driver": st.column_config.SelectboxColumn(
-                        "Driver",
-                        options=drivers_list,
-                        required=True
-                    ),
+                    "Driver": st.column_config.SelectboxColumn("Driver", options=["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi"], required=True),
                     "Purpose": st.column_config.TextColumn("Purpose"),
                     "Start Odo": st.column_config.NumberColumn("Start Odo", min_value=0, format="%d km"),
                     "End Odo": st.column_config.NumberColumn("End Odo", min_value=0, format="%d km"),
-                    "Distance (km)": st.column_config.NumberColumn("Distance (km)", min_value=0, format="%d km", disabled=True, help="Auto: End Odo - Start Odo"),
+                    "Distance (km)": st.column_config.NumberColumn("Distance (km)", min_value=0, format="%d km", disabled=True, help="Auto-calculated for trips; 0 for tolls"),
                     "Fuel Added (L)": st.column_config.NumberColumn("Fuel Added (L)", min_value=0.0, format="%.1f L"),
                     "Fuel Cost (R)": st.column_config.NumberColumn("Fuel Cost (R)", min_value=0.0, format="R %.2f"),
                     "Odo at Refuel": st.column_config.NumberColumn("Odo at Refuel", min_value=0, format="%d km"),
@@ -269,7 +267,7 @@ with tab_fleet:
                 # Safe update – no duplication
                 if not edited_page.empty:
                     original_slice_index = current_trips.index[start_idx:end_idx]
-                    edited_page = edited_page.reindex(original_slice_index)  # align index
+                    edited_page = edited_page.reindex(original_slice_index)
                     current_trips.loc[original_slice_index] = edited_page.values
                     st.session_state[session_key] = current_trips
 
@@ -286,7 +284,7 @@ with tab_fleet:
                     colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}")
                     colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}")
 
-                # Add Fuel Slip with driver dropdown
+                # Add Fuel Slip
                 with st.expander("➕ Add Fuel Slip", expanded=False):
                     with st.form(key=f"add_fuel_form_{vid}"):
                         col_date, col_odo = st.columns(2)
@@ -294,7 +292,7 @@ with tab_fleet:
                         fuel_odo = col_odo.number_input("Odometer at refuel (km)", min_value=0, value=status["odo"], step=1)
 
                         col_driver, col_litres = st.columns(2)
-                        driver = col_driver.selectbox("Driver", options=drivers_list, key=f"fuel_driver_{vid}")
+                        driver = col_driver.selectbox("Driver", options=["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi"], key=f"fuel_driver_{vid}")
                         fuel_litres = col_litres.number_input("Litres added", min_value=0.0, step=0.1, format="%.1f")
 
                         col_cost, _ = st.columns([1, 1])
@@ -325,9 +323,9 @@ with tab_fleet:
                             st.success("Fuel slip added!")
                             st.rerun()
 
-                # Add Toll Slip with driver dropdown
+                # Add Toll Slip – no Odo fields
                 with st.expander("➕ Add Toll Slip", expanded=False):
-                    st.caption("For multiple tolls on the same day → submit multiple times with different times.")
+                    st.caption("Toll payments do not require odometer readings.")
                     
                     with st.form(key=f"add_toll_form_{vid}"):
                         col_date, col_time = st.columns(2)
@@ -335,7 +333,7 @@ with tab_fleet:
                         toll_time = col_time.time_input("Approximate toll time", value=time(8, 0), step=60)
 
                         col_driver, col_amount = st.columns(2)
-                        driver = col_driver.selectbox("Driver", options=drivers_list, key=f"toll_driver_{vid}")
+                        driver = col_driver.selectbox("Driver", options=["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi"], key=f"toll_driver_{vid}")
                         toll_amount = col_amount.number_input("Toll amount (R)", min_value=0.0, step=1.0, format="%.2f")
 
                         toll_plaza = st.text_input("Toll plaza / Route", "")
@@ -347,8 +345,8 @@ with tab_fleet:
                                 "Time": toll_time,
                                 "Driver": driver,
                                 "Purpose": "Toll payment",
-                                "Start Odo": status["odo"],
-                                "End Odo": status["odo"],
+                                "Start Odo": 0,
+                                "End Odo": 0,
                                 "Distance (km)": 0,
                                 "Fuel Added (L)": 0.0,
                                 "Fuel Cost (R)": 0.0,
