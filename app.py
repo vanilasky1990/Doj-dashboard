@@ -26,6 +26,11 @@ st.markdown("""
     .status-good    { color: #006400; font-weight: bold; }
     .status-warning { color: #d2691e; font-weight: bold; }
     .status-alert   { color: #c00000; font-weight: bold; }
+    /* Green expander title when success */
+    .success-expander > div > div > div:first-child {
+        color: #006400 !important;
+        font-weight: bold !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -283,7 +288,7 @@ with tab_fleet:
                     current_trips.loc[original_slice_index] = edited_page.values
                     st.session_state[session_key] = current_trips
 
-                # Force distance recalc after edit
+                # Force distance recalc
                 current_trips["Distance (km)"] = current_trips.apply(calc_distance, axis=1)
 
                 st.caption(f"Showing rows {start_idx+1}–{end_idx} of {total_rows}")
@@ -375,7 +380,7 @@ with tab_fleet:
                                 [st.session_state[session_key], new_row],
                                 ignore_index=True
                             )
-                            st.success("Fuel slip added!")
+                            st.success("Fuel slip added successfully!")
                             st.rerun()
 
                 # Add Toll Slip
@@ -414,7 +419,7 @@ with tab_fleet:
                                 [st.session_state[session_key], new_row],
                                 ignore_index=True
                             )
-                            st.success("Toll slip added!")
+                            st.success("Toll slip added successfully!")
                             st.rerun()
 
             with subtab_report:
