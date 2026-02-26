@@ -256,9 +256,7 @@ with tab_fleet:
                     "Toll Plaza / Notes": st.column_config.TextColumn("Toll Plaza / Notes")
                 }
 
-                # ────────────────────────────────────────────────
-                # IMPORT DATA FEATURE
-                # ────────────────────────────────────────────────
+                # Import data feature
                 with st.expander("📤 Import trips from CSV or Excel", expanded=False):
                     st.info("""
                     **Expected file format** (columns can be in any order, case-insensitive):
@@ -316,9 +314,7 @@ with tab_fleet:
                         except Exception as e:
                             st.error(f"Error reading file: {str(e)}")
 
-                # ────────────────────────────────────────────────
                 # Table display + edit + pagination
-                # ────────────────────────────────────────────────
                 st.subheader(f"Recent trips / logs – {reg}")
 
                 rows_per_page = 20
@@ -361,7 +357,7 @@ with tab_fleet:
                 st.caption(f"Showing rows {start_idx+1}–{end_idx} of {total_rows}")
 
                 # ────────────────────────────────────────────────
-                # FIXED METRICS BLOCK - unique keys using v{vid}
+                # FIXED METRICS – unique keys with v{vid}
                 # ────────────────────────────────────────────────
                 st.metric(
                     label="Total log entries",
