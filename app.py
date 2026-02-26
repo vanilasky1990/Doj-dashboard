@@ -150,7 +150,7 @@ with tab_fleet:
 
     vehicle_tabs = st.tabs([f"{v['short']} ({v['reg']})" for v in vehicles])
 
-    drivers_list = ["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi"]
+    drivers_list = ["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi", "ML Kgakatsi"]
 
     for idx, tab in enumerate(vehicle_tabs):
         veh = vehicles[idx]
@@ -167,7 +167,7 @@ with tab_fleet:
 
         current_trips = st.session_state[session_key].copy()
 
-        # Auto-calculate Distance (force 0 for tolls)
+        # Force auto-calculation of Distance on every render
         def calc_distance(row):
             if row["Purpose"] == "Toll payment":
                 return 0
@@ -221,11 +221,21 @@ with tab_fleet:
                 column_config = {
                     "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD", required=True),
                     "Time": st.column_config.TimeColumn("Time", format="HH:mm", step=60),
-                    "Driver": st.column_config.SelectboxColumn("Driver", options=["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi"], required=True),
+                    "Driver": st.column_config.SelectboxColumn(
+                        "Driver",
+                        options=drivers_list,
+                        required=True
+                    ),
                     "Purpose": st.column_config.TextColumn("Purpose"),
                     "Start Odo": st.column_config.NumberColumn("Start Odo", min_value=0, format="%d km"),
                     "End Odo": st.column_config.NumberColumn("End Odo", min_value=0, format="%d km"),
-                    "Distance (km)": st.column_config.NumberColumn("Distance (km)", min_value=0, format="%d km", disabled=True, help="Auto-calculated for trips; 0 for tolls"),
+                    "Distance (km)": st.column_config.NumberColumn(
+                        "Distance (km)",
+                        min_value=0,
+                        format="%d km",
+                        disabled=True,
+                        help="Auto-calculated for trips; 0 for tolls"
+                    ),
                     "Fuel Added (L)": st.column_config.NumberColumn("Fuel Added (L)", min_value=0.0, format="%.1f L"),
                     "Fuel Cost (R)": st.column_config.NumberColumn("Fuel Cost (R)", min_value=0.0, format="R %.2f"),
                     "Odo at Refuel": st.column_config.NumberColumn("Odo at Refuel", min_value=0, format="%d km"),
@@ -271,6 +281,9 @@ with tab_fleet:
                     current_trips.loc[original_slice_index] = edited_page.values
                     st.session_state[session_key] = current_trips
 
+                # Force distance recalc after edit
+                current_trips["Distance (km)"] = current_trips.apply(calc_distance, axis=1)
+
                 st.caption(f"Showing rows {start_idx+1}–{end_idx} of {total_rows}")
                 st.metric("Total log entries", total_rows)
 
@@ -292,7 +305,7 @@ with tab_fleet:
                         fuel_odo = col_odo.number_input("Odometer at refuel (km)", min_value=0, value=status["odo"], step=1)
 
                         col_driver, col_litres = st.columns(2)
-                        driver = col_driver.selectbox("Driver", options=["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi"], key=f"fuel_driver_{vid}")
+                        driver = col_driver.selectbox("Driver", options=drivers_list, key=f"fuel_driver_{vid}")
                         fuel_litres = col_litres.number_input("Litres added", min_value=0.0, step=0.1, format="%.1f")
 
                         col_cost, _ = st.columns([1, 1])
@@ -333,7 +346,7 @@ with tab_fleet:
                         toll_time = col_time.time_input("Approximate toll time", value=time(8, 0), step=60)
 
                         col_driver, col_amount = st.columns(2)
-                        driver = col_driver.selectbox("Driver", options=["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi"], key=f"toll_driver_{vid}")
+                        driver = col_driver.selectbox("Driver", options=drivers_list, key=f"toll_driver_{vid}")
                         toll_amount = col_amount.number_input("Toll amount (R)", min_value=0.0, step=1.0, format="%.2f")
 
                         toll_plaza = st.text_input("Toll plaza / Route", "")
