@@ -261,6 +261,74 @@ with tab_fleet:
                     "Toll Plaza / Notes": st.column_config.TextColumn("Toll Plaza / Notes")
                 }
 
+                # ────────────────────────────────────────────────
+                # IMPORT DATA FEATURE (Option 1)
+                # ────────────────────────────────────────────────
+                with st.expander("📤 Import trips from CSV or Excel", expanded=False):
+                    st.info("""
+                    **Expected file format** (columns can be in any order, case-insensitive):
+                    - Date (YYYY-MM-DD)
+                    - Driver
+                    - Purpose
+                    - Start Odo / Start km
+                    - End Odo / End km
+                    - (optional) Distance (km), Fuel Added (L), Fuel Cost (R), Toll Amount (R), Notes
+                    """)
+
+                    uploaded_file = st.file_uploader(
+                        "Choose a CSV or Excel file",
+                        type=["csv", "xlsx", "xls"],
+                        accept_multiple_files=False,
+                        help="Upload your trip log file. New rows will be appended."
+                    )
+
+                    if uploaded_file is not None:
+                        try:
+                            if uploaded_file.name.endswith('.csv'):
+                                new_data = pd.read_csv(uploaded_file, parse_dates=["Date"], dayfirst=True, errors='coerce')
+                            else:
+                                new_data = pd.read_excel(uploaded_file, parse_dates=["Date"], dayfirst=True, engine='openpyxl')
+
+                            # Standardize column names (forgiving matching)
+                            column_map = {
+                                "date": "Date", "trip date": "Date", "date of trip": "Date",
+                                "driver": "Driver", "name": "Driver",
+                                "purpose": "Purpose", "reason": "Purpose", "description": "Purpose",
+                                "start odo": "Start Odo", "start km": "Start Odo", "start": "Start Odo",
+                                "end odo": "End Odo", "end km": "End Odo", "end": "End Odo",
+                                "distance": "Distance (km)", "km": "Distance (km)",
+                                "fuel added": "Fuel Added (L)", "litres": "Fuel Added (L)",
+                                "fuel cost": "Fuel Cost (R)", "cost": "Fuel Cost (R)",
+                                "toll": "Toll Amount (R)", "toll amount": "Toll Amount (R)",
+                                "notes": "Toll Plaza / Notes", "comments": "Toll Plaza / Notes"
+                            }
+
+                            new_data.columns = new_data.columns.str.lower().str.strip()
+                            new_data = new_data.rename(columns=column_map)
+
+                            # Keep only known columns
+                            known_cols = load_trips(vid).columns
+                            new_data = new_data[[c for c in new_data.columns if c in known_cols]]
+
+                            if not new_data.empty:
+                                # Append and recalculate distance
+                                current_trips = pd.concat([current_trips, new_data], ignore_index=True)
+                                current_trips["Distance (km)"] = current_trips.apply(calc_distance, axis=1)
+                                save_trips(vid, current_trips)
+
+                                st.success(f"Imported {len(new_data)} rows successfully! Data saved.")
+                                st.rerun()
+                            else:
+                                st.warning("No valid data columns found in the file. Check column names.")
+
+                        except Exception as e:
+                            st.error(f"Error reading file: {str(e)}")
+
+                # ────────────────────────────────────────────────
+                # Table display + edit + pagination
+                # ────────────────────────────────────────────────
+                st.subheader(f"Recent trips / logs – {reg}")
+
                 # Pagination (20 rows/page)
                 rows_per_page = 20
                 total_rows = len(current_trips)
