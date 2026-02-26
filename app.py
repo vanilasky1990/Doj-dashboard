@@ -67,6 +67,8 @@ st.markdown('</div>', unsafe_allow_html=True)
 # ────────────────────────────────────────────────
 tab_home, tab_sundry, tab_fleet = st.tabs(["HOME", "SUNDRY", "FLEET SERVICES"])
 
+drivers_list = ["MF Neludi", "SA Ndlela", "S Mothoa", "J Ndou", "FV Mkhwanazi", "ML Kgakatsi"]
+
 # ────────────────────────────────────────────────
 # HOME
 # ────────────────────────────────────────────────
@@ -296,6 +298,43 @@ with tab_fleet:
                     colA.metric("Total Distance", f"{total_distance:,} km")
                     colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}")
                     colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}")
+
+                # Add Trip Entry
+                with st.expander("➕ Add Trip", expanded=False):
+                    with st.form(key=f"add_trip_form_{vid}"):
+                        col_date, col_driver = st.columns(2)
+                        trip_date = col_date.date_input("Trip date", value=datetime.now().date())
+                        driver = col_driver.selectbox("Driver", options=drivers_list)
+
+                        col_start, col_end = st.columns(2)
+                        start_odo = col_start.number_input("Start Odometer (km)", min_value=0, step=1)
+                        end_odo = col_end.number_input("End Odometer (km)", min_value=0, step=1)
+
+                        purpose = st.text_input("Purpose of trip", "")
+
+                        if st.form_submit_button("Add Trip", type="primary"):
+                            distance = max(0, end_odo - start_odo) if end_odo >= start_odo else 0
+                            new_row = pd.DataFrame([{
+                                "Date": pd.to_datetime(trip_date),
+                                "Time": None,
+                                "Driver": driver,
+                                "Purpose": purpose,
+                                "Start Odo": start_odo,
+                                "End Odo": end_odo,
+                                "Distance (km)": distance,
+                                "Fuel Added (L)": 0.0,
+                                "Fuel Cost (R)": 0.0,
+                                "Odo at Refuel": 0,
+                                "Toll Amount (R)": 0.0,
+                                "Toll Plaza / Notes": ""
+                            }])
+
+                            st.session_state[session_key] = pd.concat(
+                                [st.session_state[session_key], new_row],
+                                ignore_index=True
+                            )
+                            st.success("Trip added!")
+                            st.rerun()
 
                 # Add Fuel Slip
                 with st.expander("➕ Add Fuel Slip", expanded=False):
