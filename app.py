@@ -11,30 +11,24 @@ import os
 st.set_page_config(
     page_title="DOJ&CD - MC Tsakane Dashboard",
     page_icon="⚖️",
-    layout="centered",                  # better for mobile
+    layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Mobile viewport + PWA basics
+# Mobile viewport + larger touch targets
 st.markdown("""
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#FFB612">
-    <link rel="apple-touch-icon" href="/icon-192.png">
-""", unsafe_allow_html=True)
-
-# Larger touch targets
-st.markdown("""
-<style>
-    button, .stButton>button { min-height: 48px; font-size: 16px; padding: 12px; }
-    input, .stTextInput>div>div>input, .stNumberInput>div>div>input { font-size: 16px; }
-    .stSelectbox>div>div>div, .stExpander { font-size: 16px; }
-    /* Green expander title on success */
-    .stExpander:has(.stSuccess) > div > div > div:first-child {
-        color: #006400 !important;
-        font-weight: bold !important;
-    }
-</style>
+    <style>
+        .block-container { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+        button, .stButton>button { min-height: 48px; font-size: 16px; padding: 12px; min-width: 120px; }
+        input, .stTextInput>div>div>input, .stNumberInput>div>div>input { font-size: 16px; }
+        .stSelectbox>div>div>div, .stExpander { font-size: 16px; }
+        /* Green expander title on success */
+        .stExpander:has(.stSuccess) > div > div > div:first-child {
+            color: #006400 !important;
+            font-weight: bold !important;
+        }
+    </style>
 """, unsafe_allow_html=True)
 
 # ────────────────────────────────────────────────
@@ -48,7 +42,6 @@ def load_trips(vid: int) -> pd.DataFrame:
     ]
     if os.path.exists(file_path):
         df = pd.read_csv(file_path, parse_dates=["Date"])
-        # Ensure all columns exist
         for col in columns:
             if col not in df.columns:
                 df[col] = pd.NA
@@ -193,7 +186,6 @@ with tab_fleet:
 
         current_trips = load_trips(vid)
 
-        # Auto-calculate Distance
         def calc_distance(row):
             if row["Purpose"] == "Toll payment":
                 return 0
@@ -300,7 +292,7 @@ with tab_fleet:
                     key=f"trips_editor_page_{vid}_{page}"
                 )
 
-                # Safe update + save to disk
+                # Safe update + save
                 if not edited_page.empty:
                     original_slice_index = current_trips.index[start_idx:end_idx]
                     edited_page = edited_page.reindex(original_slice_index)
@@ -321,7 +313,7 @@ with tab_fleet:
                     colB.metric("Total Fuel Cost", f"R {total_fuel_cost:,.2f}")
                     colC.metric("Total Tolls Paid", f"R {total_tolls:,.2f}")
 
-                # Add Trip Entry
+                # Add Trip
                 with st.expander("➕ Add Trip", expanded=False):
                     with st.form(key=f"add_trip_form_{vid}"):
                         col_date, col_driver = st.columns(2)
